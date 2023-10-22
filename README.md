@@ -26,7 +26,7 @@ menu misc {
 
 and presents you with the options to execute the commands configured in the file
 by typing the configured key. For Example: with the given config file above, I could 
-start dotree by typing dt (after it was installed), and then insert gb while dotree is
+start dotree by typing `dt` (after it was installed), and then type `gb` while dotree is
 running to execute `git switch $(git branch | fzf)` in bash. 
 
 Alternativly you can also do that by entering `dt gb`. If you provide an argument, it's
