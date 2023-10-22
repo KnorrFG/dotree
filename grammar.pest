@@ -1,0 +1,29 @@
+WHITESPACE = _{ "\t" | " " }
+COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE}
+
+file = { SOI ~ NEWLINE* ~ (menu ~ NEWLINE*)+ ~ EOI }
+menu = { MENU_TOKEN ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR ~ NEWLINE* }
+MENU_TOKEN = _{"menu"}
+OPENBR = _{"{"}
+CLOSINGBR = _{"}"}
+
+menu_body = { (NEWLINE* ~ entry ~ NEWLINE*)+ }
+entry = { keydef ~ ":" ~ (symbol | quick_command)}
+keydef = @{ (!(":" | WHITESPACE | NEWLINE) ~ ANY)* }
+symbol = @{ (ASCII_ALPHANUMERIC | "_")+ }
+quick_command = { normal_command  | protected_command }
+
+// a normal string in which you can escape a " with a \
+normal_command = ${ QUOTE ~ normal_content ~ QUOTE }
+normal_content = @{ ("\\\"" | !QUOTE ~ ANY)* }
+QUOTE = _{ "\"" }
+
+// a raw string, which is delimited by !""!
+// where you can insert any sign to make it unique e.g.
+// !x""x!. Multiple inserts are not mirrored, so this is valid:
+// !ab"content"ab!, but this is not: !ab"content"ba!
+protected_command = ${(sep_start ~ protected_content ~ sep_end)} 
+protected_content = @{ (!("\"" ~ PEEK ~ "!") ~ ANY)* }
+sep_start = _{ EXCL ~ PUSH((!"\"" ~ ANY)*) ~ QUOTE}
+sep_end = _{ QUOTE ~ POP ~ EXCL }
+EXCL = _{ "!" }

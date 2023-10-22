@@ -18,6 +18,12 @@ anyhow = "1.0.75"
 clap = { version = "4.4.6", features = ["derive"] }
 console = "0.15.7"
 ctrlc = "3.4.1"
+dirs = "5.0.1"
 exec = "0.3.1"
 log = "0.4.20"
+pest = "2.7.4"
+pest_derive = "2.7.4"
 pretty_env_logger = "0.5.0"
+
+[dev-dependencies]
+k9 = "0.11.6"

@@ -34,14 +34,38 @@ pub fn run(root: &Menu, input: Option<&str>) -> Result<()> {
     let mut current_menu = root;
     let mut current_input = vec![];
     let term = Term::stdout();
+    let mut written_lines = 0;
 
+    use ProcessOutput::*;
+    if let Some(input) = input {
+        for c in input.chars() {
+            current_input.push(c);
+            match process_input(current_menu, &current_input) {
+                Pending => {}
+                Invalid => {
+                    current_input.clear();
+                    written_lines += print_invalid_arg_warning();
+                    break;
+                }
+                NextMenu(m) => {
+                    current_input.clear();
+                    current_menu = m;
+                }
+                Command(c) => {
+                    term.show_cursor().context("showing cursor")?;
+                    term.flush().context("flushing term")?;
+                    return run_command(c);
+                }
+            }
+        }
+    }
     ctrlc::set_handler(move || {
         _ = Term::stderr().show_cursor();
         exit(1);
     })?;
 
     loop {
-        let mut written_lines = render_menu(current_menu, &current_input)?;
+        written_lines += render_menu(current_menu, &current_input)?;
         debug!("Current input: {current_input:?}");
         let char = term.read_char().context("reading char")?;
         debug!("got char: {char}");
@@ -51,7 +75,6 @@ pub fn run(root: &Menu, input: Option<&str>) -> Result<()> {
         } else {
             current_input.push(char);
         }
-        use ProcessOutput::*;
         match process_input(current_menu, &current_input) {
             Pending => {}
             Invalid => {
@@ -70,7 +93,13 @@ pub fn run(root: &Menu, input: Option<&str>) -> Result<()> {
             }
         }
         term.clear_last_lines(written_lines)?;
+        written_lines = 0;
     }
+}
+
+fn print_invalid_arg_warning() -> usize {
+    eprintln!("Warning, input argument was invalid");
+    1
 }
 
 fn run_command(cmd: &Command) -> Result<()> {
