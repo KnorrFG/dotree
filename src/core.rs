@@ -32,6 +32,7 @@ pub struct Menu {
 pub struct Command {
     pub exec_str: String,
     pub name: Option<String>,
+    pub env_vars: Vec<String>,
 }
 
 impl std::fmt::Display for Command {
@@ -119,7 +120,10 @@ fn print_invalid_arg_warning() -> usize {
 
 fn run_command(cmd: &Command) -> Result<()> {
     debug!("Running: {cmd}");
-    Err(anyhow!("{:?}", exec::execvp("bash", &["bash", "-c", cmd.exec_str.as_str()])))
+    Err(anyhow!(
+        "{:?}",
+        exec::execvp("bash", &["bash", "-c", cmd.exec_str.as_str()])
+    ))
 }
 
 fn render_menu(current_menu: &Menu, _current_input: &[char]) -> Result<usize> {

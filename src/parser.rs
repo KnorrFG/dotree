@@ -6,7 +6,7 @@ use pest::{
 };
 use pest_derive::Parser;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use crate::core::{Command, Menu, Node};
 
@@ -54,7 +54,8 @@ fn parse_menu(name: &str, menus: &HashMap<&str, Pairs<'_, Rule>>) -> Result<Menu
                         .context(format!("Parsing submenu: {submenu_name}"))?,
                 )
             }
-            Rule::quick_command => parse_quick_command(child_pair)?,
+            Rule::quick_command => Node::Command(parse_quick_command(child_pair)?),
+            Rule::anon_command => Node::Command(parse_anon_command(child_pair)?),
             _ => {
                 panic!("unexpected rule: {child_pair:?}")
             }
@@ -66,20 +67,50 @@ fn parse_menu(name: &str, menus: &HashMap<&str, Pairs<'_, Rule>>) -> Result<Menu
         entries,
     })
 }
-fn parse_quick_command(pair: Pair<'_, Rule>) -> Result<Node> {
+
+fn parse_anon_command(p: Pair<'_, Rule>) -> Result<Command> {
+    let body = p.into_inner().next().unwrap();
+    let mut elems = body.into_inner();
+    let first = elems.next().unwrap();
+    match first.as_rule() {
+        Rule::vars_def => {
+            let env_vars = parse_vars_def(first);
+            let mut cmd = parse_quick_command(elems.next().unwrap())?;
+            cmd.env_vars = env_vars;
+            Ok(cmd)
+        }
+        Rule::quick_command => parse_quick_command(first),
+        _ => panic!("unexpected rule: {first:#?}"),
+    }
+}
+
+fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<String> {
+    assert!(p.as_rule() == Rule::vars_def);
+    p.into_inner()
+        .map(|p| {
+            assert!(p.as_rule() == Rule::var_def, "unexpected rule: {p:#?}");
+            p.into_inner().next().unwrap().as_str().to_string()
+        })
+        .collect()
+}
+
+fn parse_quick_command(pair: Pair<'_, Rule>) -> Result<Command> {
+    assert!(pair.as_rule() == Rule::quick_command);
     let elems: Vec<_> = pair.into_inner().map(get_string_content).collect();
     let cmd = match elems.len() {
         1 => Command {
             exec_str: elems[0].clone(),
             name: None,
+            env_vars: vec![],
         },
         2 => Command {
             exec_str: elems[1].clone(),
             name: Some(elems[0].clone()),
+            env_vars: vec![],
         },
         _ => panic!("unexpected amount of string"),
     };
-    Ok(Node::Command(cmd))
+    Ok(cmd)
 }
 
 fn get_string_content(p: Pair<'_, Rule>) -> String {
@@ -106,6 +137,24 @@ mod tests {
         menu custom_commands {
             h: "print hi" - !"echo hi"!
             c: "echo ciao"
+        }
+    "#;
+
+    const ANON_CMD: &str = r#"
+        menu root {
+            c: cmd {
+                "echo foo"
+            }
+        }
+    "#;
+
+    const ANON_CMD2: &str = r#"
+        menu root {
+            c: cmd {
+                vars foo,
+                    bar
+                "echo $foo $bar"
+            }
         }
     "#;
 
@@ -142,18 +191,20 @@ Menu {
             Menu {
                 name: "custom_commands",
                 entries: {
-                    "c": Command(
-                        Command {
-                            exec_str: "echo ciao",
-                            name: None,
-                        },
-                    ),
                     "h": Command(
                         Command {
                             exec_str: "echo hi",
                             name: Some(
                                 "print hi",
                             ),
+                            env_vars: [],
+                        },
+                    ),
+                    "c": Command(
+                        Command {
+                            exec_str: "echo ciao",
+                            name: None,
+                            env_vars: [],
                         },
                     ),
                 },
@@ -163,6 +214,7 @@ Menu {
             Command {
                 exec_str: "echo "!",
                 name: None,
+                env_vars: [],
             },
         ),
     },
@@ -198,6 +250,57 @@ Err(
 Err(
     "Undefined symbol: root",
 )
+"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn anon_cmd() -> Result<()> {
+        let root = parse(ANON_CMD);
+        k9::snapshot!(
+            root,
+            r#"
+Ok(
+    Menu {
+        name: "root",
+        entries: {
+            "c": Command(
+                Command {
+                    exec_str: "echo foo",
+                    name: None,
+                    env_vars: [],
+                },
+            ),
+        },
+    },
+)
+"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn anon_cmd_2_args() -> Result<()> {
+        let root = parse(ANON_CMD2)?;
+        k9::snapshot!(
+            root,
+            r#"
+Menu {
+    name: "root",
+    entries: {
+        "c": Command(
+            Command {
+                exec_str: "echo $foo $bar",
+                name: None,
+                env_vars: [
+                    "foo",
+                    "bar",
+                ],
+            },
+        ),
+    },
+}
 "#
         );
         Ok(())

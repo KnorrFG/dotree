@@ -1,14 +1,14 @@
 WHITESPACE = _{ "\t" | " " }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE}
 
-file = { SOI ~ NEWLINE* ~ ((menu/* | command*/) ~ NEWLINE*)+ ~ EOI }
+file = { SOI ~ NEWLINE* ~ (menu ~ NEWLINE*)+ ~ EOI }
 menu = { MENU_TOKEN ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
 MENU_TOKEN = _{"menu"}
 OPENBR = _{"{"}
 CLOSINGBR = _{"}"}
 
 menu_body = { (NEWLINE* ~ entry ~ NEWLINE*)+ }
-entry = { keydef ~ ":" ~ (symbol | quick_command /*| anon_command*/)}
+entry = { keydef ~ ":" ~ (anon_command | symbol | quick_command)}
 keydef = @{ (!(":" | WHITESPACE | NEWLINE) ~ ANY)* }
 symbol = @{ (ASCII_ALPHANUMERIC | "_")+ }
 string = { normal_string  | protected_string }
@@ -31,9 +31,9 @@ sep_start = _{ EXCL ~ PUSH((!"\"" ~ ANY)*) ~ QUOTE}
 sep_end = _{ QUOTE ~ POP ~ EXCL }
 EXCL = _{ "!" }
 
-// command = { "cmd" ~ symbol ~ NEWLINE* ~ OPENBR  
-// 			~ NEWLINE* ~ cmd_body ~ NEWLINE* ~ CLOSINGBR }
-// anon_command = { "cmd" ~ NEWLINE* ~ OPENBR  
-// 			~ NEWLINE* ~ cmd_body ~ NEWLINE* ~ CLOSINGBR }
-// cmd_body = { vars_def? ~ NEWLINE* ~ quick_command }
-// vars_def
+anon_command = { "cmd" ~ NEWLINE* ~ OPENBR  
+			~ NEWLINE* ~ cmd_body ~ NEWLINE* ~ CLOSINGBR }
+cmd_body = { vars_def? ~ NEWLINE* ~ quick_command }
+vars_def = { "vars" ~ var_def ~ (DEF_SEP* ~ var_def)* ~ NEWLINE }
+DEF_SEP = _{"," ~ NEWLINE*}
+var_def = { symbol }
