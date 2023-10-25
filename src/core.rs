@@ -28,7 +28,22 @@ pub struct Menu {
     pub entries: HashMap<String, Node>,
 }
 
-pub type Command = String;
+#[derive(Debug)]
+pub struct Command {
+    pub exec_str: String,
+    pub name: Option<String>,
+}
+
+impl std::fmt::Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let v = if let Some(name) = &self.name {
+            name
+        } else {
+            &self.exec_str
+        };
+        write!(f, "{v}")
+    }
+}
 
 pub fn run(root: &Menu, input: Option<&str>) -> Result<()> {
     let mut current_menu = root;
@@ -104,7 +119,7 @@ fn print_invalid_arg_warning() -> usize {
 
 fn run_command(cmd: &Command) -> Result<()> {
     debug!("Running: {cmd}");
-    Err(anyhow!("{:?}", exec::execvp("bash", &["bash", "-c", cmd])))
+    Err(anyhow!("{:?}", exec::execvp("bash", &["bash", "-c", cmd.exec_str.as_str()])))
 }
 
 fn render_menu(current_menu: &Menu, _current_input: &[char]) -> Result<usize> {
