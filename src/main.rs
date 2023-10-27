@@ -1,12 +1,9 @@
-use std::{collections::HashMap, fs, process::exit};
+use std::{fs, process::exit};
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use console::Term;
-use dotree::{
-    core::{run, Menu, Node},
-    parser,
-};
+use dotree::{core::run, parser};
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -27,7 +24,7 @@ fn main() -> Result<()> {
     let conf = parser::parse(&conf_src).context("Parsing Config")?;
     let term = Term::stdout();
     term.hide_cursor()?;
-    let res = run(&conf, args.input.as_ref().map(String::as_str));
+    let res = run(&conf, args.input.as_deref());
     if let Err(e) = term.show_cursor() {
         eprintln!("Warning, couldn't show cursor again:\n{e:?}");
     }

@@ -3,10 +3,9 @@ use console::Term;
 use dialoguer::Input;
 use log::debug;
 use std::{
-    collections::{BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     env,
-    process::{self, exit},
-    sync::mpsc::{channel, Receiver},
+    process::exit,
 };
 
 #[derive(Debug)]
@@ -175,7 +174,7 @@ fn process_input<'a>(current_menu: &'a Menu, current_input: &[char]) -> ProcessO
         }
     }
 
-    let remaining_entries: Vec<_> = sub_menus.into_iter().filter_map(|x| x).collect();
+    let remaining_entries: Vec<_> = sub_menus.into_iter().flatten().collect();
     debug!("remaining entries: {remaining_entries:?}");
     use ProcessOutput::*;
     match remaining_entries.len() {

@@ -6,7 +6,7 @@ use pest::{
 };
 use pest_derive::Parser;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use crate::core::{Command, Menu, Node};
 
@@ -24,7 +24,7 @@ pub fn parse(src: &str) -> Result<Menu> {
     parse_menu("root", &symbols)
 }
 
-fn get_symbol_table<'a>(pairs: Pairs<'a, Rule>) -> HashMap<&'a str, Pairs<'a, Rule>> {
+fn get_symbol_table(pairs: Pairs<'_, Rule>) -> HashMap<&str, Pairs<'_, Rule>> {
     pairs
         .into_iter()
         .filter(|x| x.as_rule() != Rule::EOI)
