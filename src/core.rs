@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Context, Result};
-use console::Term;
+use console::{pad_str, Alignment, Term};
 use dialoguer::Input;
 use log::debug;
+use pest::unicode::TERMINAL_PUNCTUATION;
 use std::{
     collections::{HashMap, VecDeque},
     env,
@@ -142,8 +143,17 @@ fn query_env_var(name: &str) -> Result<String> {
 }
 
 fn render_menu(current_menu: &Menu, _current_input: &[char]) -> Result<usize> {
+    let keysection_len = current_menu
+        .entries
+        .iter()
+        .map(|(keys, _)| keys.len())
+        .max()
+        .expect("empty menu")
+        + 1;
     for (keys, node) in &current_menu.entries {
-        println!("{keys}: {node}");
+        let keys = format!("{keys}:");
+        let keys = pad_str(&keys, keysection_len, Alignment::Left, None);
+        println!("{keys} {node}");
     }
     Ok(current_menu.entries.len())
 }
