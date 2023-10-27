@@ -1,8 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use console::Term;
+use dialoguer::Input;
 use log::debug;
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
+    env,
     process::{self, exit},
     sync::mpsc::{channel, Receiver},
 };
@@ -70,7 +72,7 @@ pub fn run(root: &Menu, input: Option<&str>) -> Result<()> {
                 Command(c) => {
                     term.show_cursor().context("showing cursor")?;
                     term.flush().context("flushing term")?;
-                    return run_command(c);
+                    return run_command(c, term);
                 }
             }
         }
@@ -104,8 +106,7 @@ pub fn run(root: &Menu, input: Option<&str>) -> Result<()> {
             Command(c) => {
                 term.clear_last_lines(written_lines)?;
                 term.show_cursor().context("showing cursor")?;
-                term.flush().context("flushing term")?;
-                return run_command(c);
+                return run_command(c, term);
             }
         }
         term.clear_last_lines(written_lines)?;
@@ -118,12 +119,27 @@ fn print_invalid_arg_warning() -> usize {
     1
 }
 
-fn run_command(cmd: &Command) -> Result<()> {
+fn run_command(cmd: &Command, term: Term) -> Result<()> {
     debug!("Running: {cmd}");
+    for var in &cmd.env_vars {
+        let val = query_env_var(var).context("querying env var")?;
+        // uppon calling exec, the env vars are kept, so just setting them here
+        // means setting them for the callee
+        env::set_var(var, val);
+    }
+    term.clear_last_lines(cmd.env_vars.len())
+        .context("Clearing input lines")?;
+
     Err(anyhow!(
         "{:?}",
         exec::execvp("bash", &["bash", "-c", cmd.exec_str.as_str()])
     ))
+}
+
+fn query_env_var(name: &str) -> Result<String> {
+    Ok(Input::new()
+        .with_prompt(format!("Value for {name}"))
+        .interact_text()?)
 }
 
 fn render_menu(current_menu: &Menu, _current_input: &[char]) -> Result<usize> {
