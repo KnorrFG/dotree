@@ -52,7 +52,7 @@ pub fn run(root: &parser::Menu, input: Option<&str>) -> Result<()> {
         debug!("Current input: {current_input:?}");
         let char = term.read_char().context("reading char")?;
         debug!("got char: {char}");
-        if char == 127 as char {
+        if char == '\x08' as char {
             debug!("detected backspace");
             current_input.pop();
         } else {
