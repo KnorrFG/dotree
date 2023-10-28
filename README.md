@@ -51,7 +51,6 @@ delimiter. So `!ab"<content>"ab!` is valid, but ~`!ab"<content>"ba!`~ is not.
 The following features are planned:
 
 - A configurable default shell
-- A parameter to use an alternative config file
 - A flag to search upwards from the current working directory for a config file
 - Different types of auto completion for querying variables
 - insert commands, which will only insert the result into bash instead of executing it.

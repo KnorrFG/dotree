@@ -1,4 +1,4 @@
-use std::{fs, process::exit};
+use std::{fs, path::PathBuf, process::exit};
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
@@ -12,9 +12,14 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
     let args = Args::parse();
 
-    let conf_path = dirs::config_dir()
-        .ok_or(anyhow!("Couldn't determin config dir"))?
-        .join("dotree.dt");
+    let conf_path = if let Some(p) = args.conf_file {
+        p
+    } else {
+        dirs::config_dir()
+            .ok_or(anyhow!("Couldn't determin config dir"))?
+            .join("dotree.dt")
+    };
+
     if !conf_path.exists() {
         eprintln!(
             "Expected config file at {}, but couldn't find it. Please create one.",
@@ -38,4 +43,8 @@ fn main() -> Result<()> {
 struct Args {
     /// Input that will be process character by character, as if it was entered
     input: Option<String>,
+
+    /// path to config file. Defaults to $XDG_CONFIG_HOME/dotree.dt
+    #[arg(long, short)]
+    conf_file: Option<PathBuf>,
 }
