@@ -97,7 +97,11 @@ fn handle_node<'a>(
     root_menu: &'a Menu,
 ) -> Result<()> {
     match new_node {
-        Some(Node::Command(c)) => return run_command(c, term),
+        Some(Node::Command(c)) => {
+            term.clear_last_lines(out_proxy.n_lines)?;
+            term.show_cursor()?;
+            return run_command(c, term);
+        }
         Some(Node::Menu(m)) => {
             *current_menu = m;
         }
