@@ -24,7 +24,7 @@ fn main() -> Result<()> {
     let conf = parser::parse(&conf_src).context("Parsing Config")?;
     let term = Term::stdout();
     term.hide_cursor()?;
-    let res = run(&conf, args.input.as_deref());
+    let res = run((&conf).into(), args.input.as_deref());
     if let Err(e) = term.show_cursor() {
         eprintln!("Warning, couldn't show cursor again:\n{e:?}");
     }

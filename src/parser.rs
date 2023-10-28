@@ -8,11 +8,28 @@ use pest_derive::Parser;
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::core::{Command, Menu, Node};
-
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 struct ConfigParser;
+
+#[derive(Debug)]
+pub enum Node {
+    Menu(Menu),
+    Command(Command),
+}
+
+#[derive(Debug)]
+pub struct Menu {
+    pub name: String,
+    pub entries: HashMap<Vec<char>, Node>,
+}
+
+#[derive(Debug)]
+pub struct Command {
+    pub exec_str: String,
+    pub name: Option<String>,
+    pub env_vars: Vec<String>,
+}
 
 pub fn parse(src: &str) -> Result<Menu> {
     let mut pairs = ConfigParser::parse(Rule::file, src).context("Parsing source")?;
@@ -44,7 +61,7 @@ fn parse_menu(name: &str, menus: &HashMap<&str, Pairs<'_, Rule>>) -> Result<Menu
         .clone()
     {
         let mut children = entry.into_inner();
-        let keys = children.next().unwrap().as_str().to_string();
+        let keys = children.next().unwrap().as_str().chars().collect();
         let child_pair = children.next().unwrap();
         let next_node = match child_pair.as_rule() {
             Rule::symbol => {
@@ -124,6 +141,26 @@ fn get_string_content(p: Pair<'_, Rule>) -> String {
     res
 }
 
+impl<'a> std::fmt::Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Menu(m) => write!(f, "{}", m.name),
+            Self::Command(c) => write!(f, "{c}"),
+        }
+    }
+}
+
+impl std::fmt::Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let v = if let Some(name) = &self.name {
+            name
+        } else {
+            &self.exec_str
+        };
+        write!(f, "{v}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,11 +224,15 @@ mod tests {
 Menu {
     name: "root",
     entries: {
-        "c": Menu(
+        [
+            'c',
+        ]: Menu(
             Menu {
                 name: "custom_commands",
                 entries: {
-                    "h": Command(
+                    [
+                        'h',
+                    ]: Command(
                         Command {
                             exec_str: "echo hi",
                             name: Some(
@@ -200,7 +241,9 @@ Menu {
                             env_vars: [],
                         },
                     ),
-                    "c": Command(
+                    [
+                        'c',
+                    ]: Command(
                         Command {
                             exec_str: "echo ciao",
                             name: None,
@@ -210,7 +253,9 @@ Menu {
                 },
             },
         ),
-        "f": Command(
+        [
+            'f',
+        ]: Command(
             Command {
                 exec_str: "echo "!",
                 name: None,
@@ -265,7 +310,9 @@ Ok(
     Menu {
         name: "root",
         entries: {
-            "c": Command(
+            [
+                'c',
+            ]: Command(
                 Command {
                     exec_str: "echo foo",
                     name: None,
@@ -289,7 +336,9 @@ Ok(
 Menu {
     name: "root",
     entries: {
-        "c": Command(
+        [
+            'c',
+        ]: Command(
             Command {
                 exec_str: "echo $foo $bar",
                 name: None,

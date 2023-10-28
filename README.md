@@ -57,6 +57,7 @@ The following features are planned:
 - Different types of auto completion for querying variables
 - insert commands, which will only insert the result into bash instead of executing it.
 - being able to go back in menus
+- repeatable commands, usefull for brightnessctl _ or +
 
 ## Installation
 
