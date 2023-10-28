@@ -263,6 +263,7 @@ dependencies = [
  "exec",
  "k9",
  "log",
+ "once_cell",
  "pest",
  "pest_derive",
  "pretty_env_logger",

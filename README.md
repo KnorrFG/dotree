@@ -46,15 +46,23 @@ An alternate form of strings are protected strings: `!"<content>"!`, in which ca
 characters between the `!` and the `"`. The characters are not mirrored on the closing 
 delimiter. So `!ab"<content>"ab!` is valid, but ~`!ab"<content>"ba!`~ is not.
 
+### Local mode
+
+If you start dotree with -l, it will search for a dotree.dt file between the cwd and the file
+system root. If it finds one, it uses it instead of the normal config file, and changes the
+working directory before executing commands, to the containing directory. This way, you can 
+use dotree as a more interactive version of [just](https://github.com/casey/just). I aliased
+`dt -l` to `dtl`
+
 ## Roadmap
 
 The following features are planned:
 
 - A configurable default shell
-- A flag to search upwards from the current working directory for a config file
-- Different types of auto completion for querying variables
-- insert commands, which will only insert the result into bash instead of executing it.
-- repeatable commands, usefull for brightnessctl _ or +
+- Different types of auto completion for querying variables (History, Path)
+- echo commands, which will only echo the command instead of executing it, so it can 
+	be inserted into the bash line editor
+- repeatable commands, usefull for brightnessctl - or +
 
 ## Installation
 

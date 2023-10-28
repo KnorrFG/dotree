@@ -7,6 +7,7 @@ use std::{env, process::exit};
 
 use crate::outproxy::OutProxy;
 use crate::parser::{self, Menu, Node};
+use crate::rt_conf;
 
 #[derive(Debug, Clone)]
 enum Submenus<'a> {
@@ -123,6 +124,10 @@ fn run_command(cmd: &parser::Command, term: &Term) -> Result<()> {
     }
     term.clear_last_lines(cmd.env_vars.len())
         .context("Clearing input lines")?;
+
+    if let Some(wd) = rt_conf::local_conf_dir() {
+        env::set_current_dir(wd).context("Changing working directory")?;
+    }
 
     Err(anyhow!(
         "{:?}",

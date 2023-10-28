@@ -231,6 +231,15 @@ Menu {
                 name: "custom_commands",
                 entries: {
                     [
+                        'c',
+                    ]: Command(
+                        Command {
+                            exec_str: "echo ciao",
+                            name: None,
+                            env_vars: [],
+                        },
+                    ),
+                    [
                         'h',
                     ]: Command(
                         Command {
@@ -238,15 +247,6 @@ Menu {
                             name: Some(
                                 "print hi",
                             ),
-                            env_vars: [],
-                        },
-                    ),
-                    [
-                        'c',
-                    ]: Command(
-                        Command {
-                            exec_str: "echo ciao",
-                            name: None,
                             env_vars: [],
                         },
                     ),
