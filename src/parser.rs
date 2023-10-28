@@ -141,7 +141,7 @@ fn get_string_content(p: Pair<'_, Rule>) -> String {
     res
 }
 
-impl<'a> std::fmt::Display for Node {
+impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Menu(m) => write!(f, "{}", m.name),

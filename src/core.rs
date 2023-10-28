@@ -139,19 +139,15 @@ fn query_env_var(name: &str) -> Result<String> {
 fn render_menu(current_menu: &Menu, remaining_path: &str, out_proxy: &mut OutProxy) -> Result<()> {
     let keysection_len = current_menu
         .entries
-        .iter()
-        .map(|(keys, _)| keys.len())
+        .keys()
+        .map(|keys| keys.len())
         .max()
         .expect("empty menu")
         + 1;
     for (keys, node) in &current_menu.entries {
         let keys = String::from_iter(keys);
-        let keys = if keys.starts_with(remaining_path) {
-            format!(
-                "{}{}:",
-                style(remaining_path).green().bright().bold(),
-                &keys[remaining_path.len()..]
-            )
+        let keys = if let Some(rest) = keys.strip_prefix(remaining_path) {
+            format!("{}{}:", style(remaining_path).green().bright().bold(), rest)
         } else {
             format!("{keys}:")
         };
@@ -161,7 +157,7 @@ fn render_menu(current_menu: &Menu, remaining_path: &str, out_proxy: &mut OutPro
     Ok(())
 }
 
-fn follow_path<'a>(node: &'a Node, buf: InputBuffer) -> (Option<&'a Node>, InputBuffer) {
+fn follow_path(node: &Node, buf: InputBuffer) -> (Option<&Node>, InputBuffer) {
     match node {
         Node::Menu(this) => match find_submenus_for(this, buf) {
             Submenus::Exact(next_node, buf) => follow_path(next_node, buf),
@@ -178,7 +174,7 @@ fn follow_path<'a>(node: &'a Node, buf: InputBuffer) -> (Option<&'a Node>, Input
     }
 }
 
-fn find_submenus_for<'a>(menu: &'a Menu, buf: InputBuffer) -> Submenus<'a> {
+fn find_submenus_for(menu: &Menu, buf: InputBuffer) -> Submenus {
     // The base idea here is to compare the path with valid entries character wise.
     // A vec of options of chars is used, so it can be set to none, if it doesn't match any more
     // If it matches, the first char is removed. If after the removal of the char, the slice is
@@ -198,7 +194,7 @@ fn find_submenus_for<'a>(menu: &'a Menu, buf: InputBuffer) -> Submenus<'a> {
                 // we won't produce that state either
                 if chars[0] == *c {
                     *chars = &chars[1..];
-                    if chars.len() == 0 {
+                    if chars.is_empty() {
                         return Submenus::Exact(node, buf.with_offset(i + 1));
                     }
                 } else {
