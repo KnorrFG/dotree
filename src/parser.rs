@@ -225,11 +225,29 @@ Menu {
     name: "root",
     entries: {
         [
+            'f',
+        ]: Command(
+            Command {
+                exec_str: "echo "!",
+                name: None,
+                env_vars: [],
+            },
+        ),
+        [
             'c',
         ]: Menu(
             Menu {
                 name: "custom_commands",
                 entries: {
+                    [
+                        'c',
+                    ]: Command(
+                        Command {
+                            exec_str: "echo ciao",
+                            name: None,
+                            env_vars: [],
+                        },
+                    ),
                     [
                         'h',
                     ]: Command(
@@ -241,25 +259,7 @@ Menu {
                             env_vars: [],
                         },
                     ),
-                    [
-                        'c',
-                    ]: Command(
-                        Command {
-                            exec_str: "echo ciao",
-                            name: None,
-                            env_vars: [],
-                        },
-                    ),
                 },
-            },
-        ),
-        [
-            'f',
-        ]: Command(
-            Command {
-                exec_str: "echo "!",
-                name: None,
-                env_vars: [],
             },
         ),
     },

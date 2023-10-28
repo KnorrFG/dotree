@@ -1,45 +1,50 @@
 use anyhow::{anyhow, Context, Result};
-use console::{pad_str, Alignment, Term};
+use console::{pad_str, style, Alignment, Key, Term};
 use dialoguer::Input;
 use log::debug;
 use std::io::Write;
-use std::{collections::HashMap, env, process::exit};
+use std::{env, process::exit};
 
 use crate::outproxy::OutProxy;
-use crate::parser::{self, Menu};
-
-#[derive(Debug, Clone, Copy)]
-pub enum NodeRef<'a> {
-    Menu(&'a parser::Menu),
-    Command(&'a parser::Command),
-}
+use crate::parser::{self, Menu, Node};
 
 #[derive(Debug, Clone)]
-pub enum Submenus<'a, 'b> {
-    Exact(NodeRef<'a>, &'b [char]),
-    Incomplete,
+enum Submenus<'a> {
+    Exact(&'a Node, InputBuffer),
+    Incomplete(InputBuffer),
     None,
 }
 
-pub fn run(root: &parser::Menu, input: Option<&str>) -> Result<()> {
-    let mut current_menu = root;
-    let root_node = NodeRef::Menu(root);
-    let mut current_input = if let Some(input) = input {
+#[derive(Debug, Clone)]
+struct InputBuffer {
+    chars: Vec<char>,
+    pos: usize,
+}
+
+pub fn run(root_node: &Node, input: Option<&str>) -> Result<()> {
+    let Node::Menu(root_menu) = root_node else {
+        panic!("root node isn't a menu")
+    };
+    let mut current_menu = root_menu;
+    let current_input_chars = if let Some(input) = input {
         input.chars().collect()
     } else {
         vec![]
     };
+
     let term = Term::stdout();
     let mut out_proxy = OutProxy::new();
 
-    let cur_node = root_node.follow_path(&current_input);
+    let mut current_input;
+    let (cur_node, current_input_) =
+        follow_path(root_node, InputBuffer::from_vec(current_input_chars));
+    current_input = current_input_;
     handle_node(
         cur_node,
         &mut current_menu,
-        &mut current_input,
         &term,
         &mut out_proxy,
-        root,
+        root_menu,
     )?;
 
     ctrlc::set_handler(move || {
@@ -48,24 +53,36 @@ pub fn run(root: &parser::Menu, input: Option<&str>) -> Result<()> {
     })?;
 
     loop {
-        render_menu(current_menu, &current_input, &mut out_proxy)?;
-        debug!("Current input: {current_input:?}");
-        let char = term.read_char().context("reading char")?;
-        debug!("got char: {char}");
-        if char == '\x08' as char {
-            debug!("detected backspace");
-            current_input.pop();
-        } else {
-            current_input.push(char);
+        render_menu(
+            current_menu,
+            current_input.as_slice().iter().collect::<String>().as_ref(),
+            &mut out_proxy,
+        )?;
+        let mut chars = current_input.take();
+        debug!("Current input: {chars:?}");
+        let key = term.read_key().context("reading char")?;
+        debug!("got char: {key:?}");
+        match key {
+            Key::Char(c) => {
+                chars.push(c);
+            }
+            Key::Backspace => {
+                chars.pop();
+            }
+            Key::Escape => {
+                term.clear_last_lines(out_proxy.n_lines)?;
+                return Ok(());
+            }
+            _ => {}
         }
-        let cur_node = root_node.follow_path(&current_input);
+        let (cur_node, current_input_) = follow_path(root_node, InputBuffer::from_vec(chars));
+        current_input = current_input_;
         handle_node(
             cur_node,
             &mut current_menu,
-            &mut current_input,
             &term,
             &mut out_proxy,
-            root,
+            root_menu,
         )?;
         term.clear_last_lines(out_proxy.n_lines)?;
         out_proxy.n_lines = 0;
@@ -73,21 +90,19 @@ pub fn run(root: &parser::Menu, input: Option<&str>) -> Result<()> {
 }
 
 fn handle_node<'a>(
-    new_node: Option<NodeRef<'a>>,
+    new_node: Option<&'a Node>,
     current_menu: &mut &'a Menu,
-    current_input: &mut Vec<char>,
     term: &Term,
     out_proxy: &mut OutProxy,
     root_menu: &'a Menu,
 ) -> Result<()> {
     match new_node {
-        Some(NodeRef::Command(c)) => return run_command(c, term),
-        Some(NodeRef::Menu(m)) => {
+        Some(Node::Command(c)) => return run_command(c, term),
+        Some(Node::Menu(m)) => {
             *current_menu = m;
         }
         None => {
             writeln!(out_proxy, "Warning, input argument was invalid")?;
-            current_input.clear();
             *current_menu = root_menu;
         }
     }
@@ -117,11 +132,7 @@ fn query_env_var(name: &str) -> Result<String> {
         .interact_text()?)
 }
 
-fn render_menu(
-    current_menu: &Menu,
-    _current_input: &[char],
-    out_proxy: &mut OutProxy,
-) -> Result<()> {
+fn render_menu(current_menu: &Menu, remaining_path: &str, out_proxy: &mut OutProxy) -> Result<()> {
     let keysection_len = current_menu
         .entries
         .iter()
@@ -130,27 +141,40 @@ fn render_menu(
         .expect("empty menu")
         + 1;
     for (keys, node) in &current_menu.entries {
-        let keys = format!("{}:", String::from_iter(keys));
+        let keys = String::from_iter(keys);
+        let keys = if keys.starts_with(remaining_path) {
+            format!(
+                "{}{}:",
+                style(remaining_path).green().bright().bold(),
+                &keys[remaining_path.len()..]
+            )
+        } else {
+            format!("{keys}:")
+        };
         let keys = pad_str(&keys, keysection_len, Alignment::Left, None);
         writeln!(out_proxy, "{keys} {node}")?;
     }
     Ok(())
 }
 
-impl<'a> NodeRef<'a> {
-    pub fn follow_path(self, path: &[char]) -> Option<NodeRef<'a>> {
-        match self {
-            Self::Menu(this) => match find_submenus_for(this, path) {
-                Submenus::Exact(next_node, remaining_path) => next_node.follow_path(remaining_path),
-                Submenus::Incomplete => Some(self),
-                Submenus::None => None,
-            },
-            Self::Command(_) => Some(self),
-        }
+fn follow_path<'a>(node: &'a Node, buf: InputBuffer) -> (Option<&'a Node>, InputBuffer) {
+    match node {
+        Node::Menu(this) => match find_submenus_for(this, buf) {
+            Submenus::Exact(next_node, buf) => follow_path(next_node, buf),
+            Submenus::Incomplete(buf) => (Some(node), buf),
+            Submenus::None => (
+                None,
+                InputBuffer {
+                    chars: vec![],
+                    pos: 0,
+                },
+            ),
+        },
+        Node::Command(_) => (Some(node), buf),
     }
 }
 
-pub fn find_submenus_for<'a, 'b>(menu: &'a Menu, path: &'b [char]) -> Submenus<'a, 'b> {
+fn find_submenus_for<'a>(menu: &'a Menu, buf: InputBuffer) -> Submenus<'a> {
     // The base idea here is to compare the path with valid entries character wise.
     // A vec of options of chars is used, so it can be set to none, if it doesn't match any more
     // If it matches, the first char is removed. If after the removal of the char, the slice is
@@ -162,7 +186,7 @@ pub fn find_submenus_for<'a, 'b>(menu: &'a Menu, path: &'b [char]) -> Submenus<'
         .iter()
         .map(|(chars, nodes)| (Some(chars.as_slice()), nodes))
         .collect();
-    for (i, c) in path.iter().enumerate() {
+    for (i, c) in buf.as_slice().iter().enumerate() {
         for (chars_opt, node) in &mut entries {
             if let Some(chars) = chars_opt {
                 // this could panic, but empty menu entries aren't allowed and won't happen.
@@ -171,7 +195,7 @@ pub fn find_submenus_for<'a, 'b>(menu: &'a Menu, path: &'b [char]) -> Submenus<'
                 if chars[0] == *c {
                     *chars = &chars[1..];
                     if chars.len() == 0 {
-                        return Submenus::Exact((*node).into(), &path[i + 1..]);
+                        return Submenus::Exact(node, buf.with_offset(i + 1));
                     }
                 } else {
                     *chars_opt = None;
@@ -183,15 +207,25 @@ pub fn find_submenus_for<'a, 'b>(menu: &'a Menu, path: &'b [char]) -> Submenus<'
     if entries.iter().all(|(chars, _)| chars.is_none()) {
         Submenus::None
     } else {
-        Submenus::Incomplete
+        Submenus::Incomplete(buf)
     }
 }
 
-impl<'a> From<&'a parser::Node> for NodeRef<'a> {
-    fn from(value: &'a parser::Node) -> Self {
-        match value {
-            parser::Node::Menu(m) => Self::Menu(m),
-            parser::Node::Command(c) => Self::Command(c),
-        }
+impl InputBuffer {
+    fn take(self) -> Vec<char> {
+        self.chars
+    }
+
+    fn from_vec(chars: Vec<char>) -> Self {
+        InputBuffer { chars, pos: 0 }
+    }
+
+    fn as_slice(&self) -> &[char] {
+        &self.chars[self.pos..]
+    }
+
+    fn with_offset(mut self, offset: usize) -> Self {
+        self.pos += offset;
+        self
     }
 }
