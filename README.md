@@ -40,6 +40,8 @@ A command can either be declared as quick command, i.e. a string that contains b
 optionally with another string and a `-` in front of it, to have a name displayed in place
 of the bash code, or as command via the `cmd` keyword, which allows for the additional
 definition of variables that will be queried and then passed as env vars to the bash invocation.
+To query the input, [rustyline](https://github.com/kkawakam/rustyline) is used, and you have 
+path completion and a history.
 
 An alternate form of strings are protected strings: `!"<content>"!`, in which case you can use 
 `"` freely within the string. and in case you even need `!"` in a string, you can add any
@@ -59,7 +61,6 @@ use dotree as a more interactive version of [just](https://github.com/casey/just
 The following features are planned:
 
 - A configurable default shell
-- Different types of auto completion for querying variables (History, Path)
 - repeatable commands, usefull for brightnessctl - or +
 
 ## Installation
