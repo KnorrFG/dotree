@@ -21,17 +21,15 @@ fn main() -> Result<()> {
             eprintln!("Couldnt find a local config");
             exit(1);
         }
+    } else if let Some(p) = args.conf_file {
+        (p, None)
     } else {
-        if let Some(p) = args.conf_file {
-            (p, None)
-        } else {
-            (
-                dirs::config_dir()
-                    .ok_or(anyhow!("Couldn't determin config dir"))?
-                    .join("dotree.dt"),
-                None,
-            )
-        }
+        (
+            dirs::config_dir()
+                .ok_or(anyhow!("Couldn't determin config dir"))?
+                .join("dotree.dt"),
+            None,
+        )
     };
 
     rt_conf::init(local_conf_dir);

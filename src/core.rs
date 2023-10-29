@@ -1,8 +1,14 @@
 use anyhow::{anyhow, Context, Result};
 use console::{pad_str, style, Alignment, Key, Term};
-use dialoguer::Input;
 use log::debug;
+use rustyline::completion::{Completer, FilenameCompleter};
+use rustyline::config;
+use rustyline::highlight::Highlighter;
+use rustyline::{Completer, Helper, Hinter, Validator};
+use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::{env, process::exit};
 
 use crate::outproxy::OutProxy;
@@ -115,19 +121,22 @@ fn handle_node<'a>(
 }
 
 fn run_command(cmd: &parser::Command, term: &Term) -> Result<()> {
+    let mut history = load_hist().context("loading hist")?;
     debug!("Running: {cmd}");
-    for var in &cmd.env_vars {
-        let val = query_env_var(var).context("querying env var")?;
-        // uppon calling exec, the env vars are kept, so just setting them here
-        // means setting them for the callee
-        env::set_var(var, val);
-    }
-    term.clear_last_lines(cmd.env_vars.len())
-        .context("Clearing input lines")?;
 
     if let Some(wd) = rt_conf::local_conf_dir() {
         env::set_current_dir(wd).context("Changing working directory")?;
     }
+
+    for var in &cmd.env_vars {
+        history = query_env_var(var, history).context("querying env var")?;
+        // uppon calling exec, the env vars are kept, so just setting them here
+        // means setting them for the callee
+        env::set_var(var, history.last().unwrap());
+    }
+    term.clear_last_lines(cmd.env_vars.len())
+        .context("Clearing input lines")?;
+    store_hist(history).context("Storing history")?;
 
     Err(anyhow!(
         "{:?}",
@@ -135,10 +144,56 @@ fn run_command(cmd: &parser::Command, term: &Term) -> Result<()> {
     ))
 }
 
-fn query_env_var(name: &str) -> Result<String> {
-    Ok(Input::new()
-        .with_prompt(format!("Value for {name}"))
-        .interact_text()?)
+fn get_hist_path() -> Result<PathBuf> {
+    let dir = if let Some(sd) = dirs::state_dir() {
+        sd
+    } else {
+        dirs::data_local_dir().ok_or(anyhow!("couldn't get local dir"))?
+    };
+    Ok(dir.join("dthist"))
+}
+
+fn load_hist() -> Result<Vec<String>> {
+    let hist_path = get_hist_path()?;
+    Ok(if hist_path.exists() {
+        fs::read_to_string(hist_path)
+            .context("reading file")?
+            .lines()
+            .map(|x| x.to_string())
+            .collect()
+    } else {
+        vec![]
+    })
+}
+
+fn store_hist(hist: Vec<String>) -> Result<()> {
+    #[cfg(windows)]
+    let line_ending = "\r\n";
+    #[cfg(not(windows))]
+    let line_ending = "\n";
+
+    fs::write(get_hist_path()?, hist.join(line_ending))?;
+    Ok(())
+}
+
+#[derive(Helper, Completer, Hinter, Validator)]
+struct RlHelper {
+    #[rustyline(Completer)]
+    completer: FilenameCompleter,
+}
+impl Highlighter for RlHelper {}
+
+fn query_env_var(name: &str, mut hist: Vec<String>) -> Result<Vec<String>> {
+    let mut rl = rustyline::Editor::new()?;
+    rl.set_helper(Some(RlHelper {
+        completer: FilenameCompleter::new(),
+    }));
+    for h in &hist {
+        rl.add_history_entry(h)?;
+    }
+    let line = rl.readline(&format!("Value for {name}: "))?;
+    hist.push(line);
+    Ok(hist)
 }
 
 fn render_menu(current_menu: &Menu, remaining_path: &str, out_proxy: &mut OutProxy) -> Result<()> {

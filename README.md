@@ -60,8 +60,6 @@ The following features are planned:
 
 - A configurable default shell
 - Different types of auto completion for querying variables (History, Path)
-- echo commands, which will only echo the command instead of executing it, so it can 
-	be inserted into the bash line editor
 - repeatable commands, usefull for brightnessctl - or +
 
 ## Installation
