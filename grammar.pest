@@ -2,7 +2,7 @@ WHITESPACE = _{ "\t" | " " }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE}
 
 file = { SOI ~ NEWLINE* ~ (menu ~ NEWLINE*)+ ~ EOI }
-menu = { MENU_TOKEN ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
+menu = { MENU_TOKEN ~ string? ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
 MENU_TOKEN = _{"menu"}
 OPENBR = _{"{"}
 CLOSINGBR = _{"}"}

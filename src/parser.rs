@@ -21,6 +21,7 @@ pub enum Node {
 #[derive(Debug)]
 pub struct Menu {
     pub name: String,
+    pub display_name: Option<String>,
     pub entries: HashMap<Vec<char>, Node>,
 }
 
@@ -29,6 +30,12 @@ pub struct Command {
     pub exec_str: String,
     pub name: Option<String>,
     pub env_vars: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct RawMenu<'a> {
+    display_name: Option<String>,
+    body: Pairs<'a, Rule>,
 }
 
 pub fn parse(src: &str) -> Result<Menu> {
@@ -41,25 +48,49 @@ pub fn parse(src: &str) -> Result<Menu> {
     parse_menu("root", &symbols)
 }
 
-fn get_symbol_table(pairs: Pairs<'_, Rule>) -> HashMap<&str, Pairs<'_, Rule>> {
+fn get_symbol_table(pairs: Pairs<'_, Rule>) -> HashMap<&str, RawMenu<'_>> {
     pairs
         .into_iter()
         .filter(|x| x.as_rule() != Rule::EOI)
         .map(|menu| {
             let mut menu_elems = menu.into_inner();
-            let menu_name = menu_elems.next().unwrap();
-            (menu_name.as_str(), menu_elems.next().unwrap().into_inner())
+            let first_child = menu_elems.next().unwrap();
+            let (display_name, menu_name) = if first_child.as_rule() == Rule::string {
+                (
+                    Some(
+                        first_child
+                            .into_inner()
+                            .next()
+                            .unwrap()
+                            .into_inner()
+                            .next()
+                            .unwrap()
+                            .as_str()
+                            .to_string(),
+                    ),
+                    menu_elems.next().unwrap(),
+                )
+            } else {
+                (None, first_child)
+            };
+            (
+                menu_name.as_str(),
+                RawMenu {
+                    display_name,
+                    body: menu_elems.next().unwrap().into_inner(),
+                },
+            )
         })
         .collect()
 }
 
-fn parse_menu(name: &str, menus: &HashMap<&str, Pairs<'_, Rule>>) -> Result<Menu> {
+fn parse_menu(name: &str, menus: &HashMap<&str, RawMenu<'_>>) -> Result<Menu> {
     let mut entries = HashMap::new();
-    for entry in menus
+    let RawMenu { display_name, body } = menus
         .get(name)
         .ok_or(anyhow!("Undefined symbol: {name}"))?
-        .clone()
-    {
+        .clone();
+    for entry in body {
         let mut children = entry.into_inner();
         let keys = children.next().unwrap().as_str().chars().collect();
         let child_pair = children.next().unwrap();
@@ -81,6 +112,7 @@ fn parse_menu(name: &str, menus: &HashMap<&str, Pairs<'_, Rule>>) -> Result<Menu
     }
     Ok(Menu {
         name: name.to_string(),
+        display_name,
         entries,
     })
 }
@@ -144,7 +176,7 @@ fn get_string_content(p: Pair<'_, Rule>) -> String {
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Menu(m) => write!(f, "{}", m.name),
+            Self::Menu(m) => write!(f, "{}", m.display_name.as_ref().unwrap_or(&m.name)),
             Self::Command(c) => write!(f, "{c}"),
         }
     }
@@ -195,11 +227,13 @@ mod tests {
         }
     "#;
 
-    // TODO: implement check so this will fail a test
-    const _PREFIX_KEYS: &str = r#"
+    const NAMED_MENU: &str = r#"
         menu root {
-            a: !"echo a"!
-            aa: !"echo aa"!
+            m: menu2
+        }
+
+        menu "2nd menu" menu2 {
+            f: "echo foo"
         }
     "#;
 
@@ -223,12 +257,14 @@ mod tests {
             r#"
 Menu {
     name: "root",
+    display_name: None,
     entries: {
         [
             'c',
         ]: Menu(
             Menu {
                 name: "custom_commands",
+                display_name: None,
                 entries: {
                     [
                         'c',
@@ -309,6 +345,7 @@ Err(
 Ok(
     Menu {
         name: "root",
+        display_name: None,
         entries: {
             [
                 'c',
@@ -335,6 +372,7 @@ Ok(
             r#"
 Menu {
     name: "root",
+    display_name: None,
     entries: {
         [
             'c',
@@ -346,6 +384,44 @@ Menu {
                     "foo",
                     "bar",
                 ],
+            },
+        ),
+    },
+}
+"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn named_menu() -> Result<()> {
+        let root = parse(NAMED_MENU)?;
+        k9::snapshot!(
+            root,
+            r#"
+Menu {
+    name: "root",
+    display_name: None,
+    entries: {
+        [
+            'm',
+        ]: Menu(
+            Menu {
+                name: "menu2",
+                display_name: Some(
+                    "2nd menu",
+                ),
+                entries: {
+                    [
+                        'f',
+                    ]: Command(
+                        Command {
+                            exec_str: "echo foo",
+                            name: None,
+                            env_vars: [],
+                        },
+                    ),
+                },
             },
         ),
     },
