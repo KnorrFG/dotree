@@ -33,7 +33,7 @@ pub struct Command {
     pub env_vars: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CommandSetting {
     Repeat,
     IgnoreResult,
@@ -239,6 +239,11 @@ impl std::fmt::Display for Command {
     }
 }
 
+impl Command {
+    pub fn repeat(&self) -> bool {
+        self.settings.contains(&CommandSetting::Repeat)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

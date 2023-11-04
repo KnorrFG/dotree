@@ -7,12 +7,13 @@ use rustyline::highlight::Highlighter;
 use rustyline::{Completer, Helper, Hinter, Validator};
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::Arc;
 use std::{env, process::exit};
 use std::{fs, io};
 
 use crate::outproxy::OutProxy;
-use crate::parser::{self, Menu, Node};
+use crate::parser::{self, CommandSetting, Menu, Node};
 use crate::rt_conf;
 
 #[derive(Debug, Clone)]
@@ -119,9 +120,12 @@ fn handle_node<'a>(
 ) -> Result<()> {
     match new_node {
         Some(Node::Command(c)) => {
-            term.clear_last_lines(out_proxy.n_lines)?;
-            term.show_cursor()?;
-            return run_command(c, term, arg_vals);
+            if c.repeat() {
+            } else {
+                term.clear_last_lines(out_proxy.n_lines)?;
+                term.show_cursor()?;
+            }
+            run_command(c, term, arg_vals)?;
         }
         Some(Node::Menu(m)) => {
             *current_menu = m;
@@ -159,14 +163,35 @@ fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Resul
         // means setting them for the callee
         env::set_var(var, val);
     }
-    term.clear_last_lines(cmd.env_vars.len())
+    term.clear_last_lines(cmd.env_vars.len() - arg_vals.len())
         .context("Clearing input lines")?;
     store_hist(history).context("Storing history")?;
 
-    Err(anyhow!(
-        "{:?}",
-        exec::execvp("bash", &["bash", "-c", cmd.exec_str.as_str()])
-    ))
+    if cmd.settings.contains(&CommandSetting::Repeat) {
+        run_subcommand(
+            "bash",
+            &["-c", cmd.exec_str.as_str()],
+            cmd.settings.contains(&CommandSetting::IgnoreResult),
+        )
+    } else {
+        Err(anyhow!(
+            "{:?}",
+            exec::execvp("bash", &["bash", "-c", cmd.exec_str.as_str()])
+        ))
+    }
+}
+
+fn run_subcommand(prog: &str, args: &[&str], ignore_result: bool) -> Result<()> {
+    let status = std::process::Command::new(prog)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .args(args)
+        .status()?;
+    if !ignore_result && !status.success() {
+        Err(anyhow!("Process didn't exit successfully: {status:?}"))
+    } else {
+        Ok(())
+    }
 }
 
 fn get_hist_path() -> Result<PathBuf> {
