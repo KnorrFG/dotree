@@ -62,7 +62,7 @@ The following features are planned:
 
 - A configurable default shell
 - repeatable commands, usefull for brightnessctl - or +
-- name menus
+- clean up grammar
 
 ## Installation
 

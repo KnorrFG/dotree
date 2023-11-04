@@ -2,8 +2,7 @@ WHITESPACE = _{ "\t" | " " }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE}
 
 file = { SOI ~ NEWLINE* ~ (menu ~ NEWLINE*)+ ~ EOI }
-menu = { MENU_TOKEN ~ string? ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
-MENU_TOKEN = _{"menu"}
+menu = { "menu" ~ string? ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
 OPENBR = _{"{"}
 CLOSINGBR = _{"}"}
 
@@ -33,7 +32,9 @@ EXCL = _{ "!" }
 
 anon_command = { "cmd" ~ NEWLINE* ~ OPENBR  
 			~ NEWLINE* ~ cmd_body ~ NEWLINE* ~ CLOSINGBR }
-cmd_body = { vars_def? ~ NEWLINE* ~ quick_command }
+cmd_body = { cmd_settings? ~ NEWLINE* ~ vars_def? ~ NEWLINE* ~ quick_command }
 vars_def = { "vars" ~ var_def ~ (DEF_SEP* ~ var_def)* ~ NEWLINE }
 DEF_SEP = _{"," ~ NEWLINE*}
 var_def = { symbol }
+
+cmd_settings = { "set" ~ symbol ~ (DEF_SEP* ~ symbol)* ~ NEWLINE }

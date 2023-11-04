@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pest::{
     iterators::{Pair, Pairs},
-    Parser,
+    ParseResult, Parser,
 };
 use pest_derive::Parser;
 
@@ -28,8 +28,15 @@ pub struct Menu {
 #[derive(Debug)]
 pub struct Command {
     pub exec_str: String,
+    pub settings: Vec<CommandSetting>,
     pub name: Option<String>,
     pub env_vars: Vec<String>,
+}
+
+#[derive(Debug)]
+pub enum CommandSetting {
+    Repeat,
+    IgnoreResult,
 }
 
 #[derive(Debug, Clone)]
@@ -102,8 +109,16 @@ fn parse_menu(name: &str, menus: &HashMap<&str, RawMenu<'_>>) -> Result<Menu> {
                         .context(format!("Parsing submenu: {submenu_name}"))?,
                 )
             }
-            Rule::quick_command => Node::Command(parse_quick_command(child_pair)?),
-            Rule::anon_command => Node::Command(parse_anon_command(child_pair)?),
+            Rule::quick_command => {
+                let (display_name, exec_str) = parse_quick_command(child_pair);
+                Node::Command(Command {
+                    exec_str,
+                    name: display_name,
+                    settings: vec![],
+                    env_vars: vec![],
+                })
+            }
+            Rule::anon_command => Node::Command(parse_anon_command(child_pair)),
             _ => {
                 panic!("unexpected rule: {child_pair:?}")
             }
@@ -117,20 +132,60 @@ fn parse_menu(name: &str, menus: &HashMap<&str, RawMenu<'_>>) -> Result<Menu> {
     })
 }
 
-fn parse_anon_command(p: Pair<'_, Rule>) -> Result<Command> {
+fn parse_anon_command(p: Pair<'_, Rule>) -> Command {
     let body = p.into_inner().next().unwrap();
     let mut elems = body.into_inner();
-    let first = elems.next().unwrap();
-    match first.as_rule() {
-        Rule::vars_def => {
-            let env_vars = parse_vars_def(first);
-            let mut cmd = parse_quick_command(elems.next().unwrap())?;
-            cmd.env_vars = env_vars;
-            Ok(cmd)
+    let mut parser = CmdBodyParser::default();
+    loop {
+        let p = elems.next().unwrap();
+        if let Some(cmd) = parser.parse(p) {
+            break cmd;
         }
-        Rule::quick_command => parse_quick_command(first),
-        _ => panic!("unexpected rule: {first:#?}"),
     }
+}
+
+#[derive(Default)]
+struct CmdBodyParser {
+    settings: Option<Vec<CommandSetting>>,
+    vars: Option<Vec<String>>,
+}
+
+impl CmdBodyParser {
+    fn parse(&mut self, p: Pair<'_, Rule>) -> Option<Command> {
+        match p.as_rule() {
+            Rule::cmd_settings => {
+                self.settings = Some(parse_cmd_settings(p));
+                None
+            }
+            Rule::vars_def => {
+                self.vars = Some(parse_vars_def(p));
+                None
+            }
+            Rule::quick_command => {
+                let (display_name, exec_str) = parse_quick_command(p);
+                Some(Command {
+                    exec_str,
+                    settings: self.settings.take().unwrap_or(vec![]),
+                    name: display_name,
+                    env_vars: self.vars.take().unwrap_or(vec![]),
+                })
+            }
+            _ => panic!("unexpected rule: {p:#?}"),
+        }
+    }
+}
+
+fn parse_cmd_settings(p: Pair<'_, Rule>) -> Vec<CommandSetting> {
+    let mut res = vec![];
+    for pair in p.into_inner() {
+        assert!(pair.as_rule() == Rule::symbol);
+        res.push(match pair.as_str() {
+            "repeat" => CommandSetting::Repeat,
+            "ignore_result" => CommandSetting::IgnoreResult,
+            other => panic!("invalid command setting: {other}"),
+        })
+    }
+    res
 }
 
 fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<String> {
@@ -143,23 +198,14 @@ fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<String> {
         .collect()
 }
 
-fn parse_quick_command(pair: Pair<'_, Rule>) -> Result<Command> {
+fn parse_quick_command(pair: Pair<'_, Rule>) -> (Option<String>, String) {
     assert!(pair.as_rule() == Rule::quick_command);
     let elems: Vec<_> = pair.into_inner().map(get_string_content).collect();
-    let cmd = match elems.len() {
-        1 => Command {
-            exec_str: elems[0].clone(),
-            name: None,
-            env_vars: vec![],
-        },
-        2 => Command {
-            exec_str: elems[1].clone(),
-            name: Some(elems[0].clone()),
-            env_vars: vec![],
-        },
+    match elems.len() {
+        1 => (None, elems[0].clone()),
+        2 => (Some(elems[0].clone()), elems[1].clone()),
         _ => panic!("unexpected amount of string"),
-    };
-    Ok(cmd)
+    }
 }
 
 fn get_string_content(p: Pair<'_, Rule>) -> String {
@@ -249,6 +295,24 @@ mod tests {
         }
     "#;
 
+    const WITH_SETTING: &str = r#"
+        menu root {
+            a: cmd {
+                set repeat
+                "touch foo"
+            }
+        }
+    "#;
+
+    const WITH_SETTING_2: &str = r#"
+        menu root {
+            a: cmd {
+                set repeat, ignore_result
+                "touch foo"
+            }
+        }
+    "#;
+
     #[test]
     fn test_parsing() -> Result<()> {
         let root = parse(CONF)?;
@@ -271,6 +335,7 @@ Menu {
                     ]: Command(
                         Command {
                             exec_str: "echo ciao",
+                            settings: [],
                             name: None,
                             env_vars: [],
                         },
@@ -280,6 +345,7 @@ Menu {
                     ]: Command(
                         Command {
                             exec_str: "echo hi",
+                            settings: [],
                             name: Some(
                                 "print hi",
                             ),
@@ -294,6 +360,7 @@ Menu {
         ]: Command(
             Command {
                 exec_str: "echo "!",
+                settings: [],
                 name: None,
                 env_vars: [],
             },
@@ -352,6 +419,7 @@ Ok(
             ]: Command(
                 Command {
                     exec_str: "echo foo",
+                    settings: [],
                     name: None,
                     env_vars: [],
                 },
@@ -379,6 +447,7 @@ Menu {
         ]: Command(
             Command {
                 exec_str: "echo $foo $bar",
+                settings: [],
                 name: None,
                 env_vars: [
                     "foo",
@@ -417,11 +486,71 @@ Menu {
                     ]: Command(
                         Command {
                             exec_str: "echo foo",
+                            settings: [],
                             name: None,
                             env_vars: [],
                         },
                     ),
                 },
+            },
+        ),
+    },
+}
+"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn with_setting() -> Result<()> {
+        let root = parse(WITH_SETTING)?;
+        k9::snapshot!(
+            root,
+            r#"
+Menu {
+    name: "root",
+    display_name: None,
+    entries: {
+        [
+            'a',
+        ]: Command(
+            Command {
+                exec_str: "touch foo",
+                settings: [
+                    Repeat,
+                ],
+                name: None,
+                env_vars: [],
+            },
+        ),
+    },
+}
+"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn with_setting2() -> Result<()> {
+        let root = parse(WITH_SETTING_2)?;
+        k9::snapshot!(
+            root,
+            r#"
+Menu {
+    name: "root",
+    display_name: None,
+    entries: {
+        [
+            'a',
+        ]: Command(
+            Command {
+                exec_str: "touch foo",
+                settings: [
+                    Repeat,
+                    IgnoreResult,
+                ],
+                name: None,
+                env_vars: [],
             },
         ),
     },
