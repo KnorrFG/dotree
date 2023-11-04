@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     let conf = parser::parse(&conf_src).context("Parsing Config")?;
     let term = Term::stdout();
     term.hide_cursor()?;
-    let res = run(&Node::Menu(conf), args.input.as_deref());
+    let res = run(&Node::Menu(conf), &args.input);
     if let Err(e) = term.show_cursor() {
         eprintln!("Warning, couldn't show cursor again:\n{e:?}");
     }
@@ -72,7 +72,7 @@ fn search_local_config() -> Result<Option<PathBuf>> {
 #[derive(Parser)]
 struct Args {
     /// Input that will be process character by character, as if it was entered
-    input: Option<String>,
+    input: Vec<String>,
 
     /// path to config file. Defaults to $XDG_CONFIG_HOME/dotree.dt
     #[arg(long, short)]

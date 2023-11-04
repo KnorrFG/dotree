@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use console::{pad_str, style, Alignment, Key, Term};
 use log::debug;
 use rustyline::completion::{Completer, FilenameCompleter};
@@ -28,16 +28,17 @@ struct InputBuffer {
     pos: usize,
 }
 
-pub fn run(root_node: &Node, input: Option<&str>) -> Result<()> {
+pub fn run(root_node: &Node, input: &[String]) -> Result<()> {
     let Node::Menu(root_menu) = root_node else {
         panic!("root node isn't a menu")
     };
     let mut current_menu = root_menu;
-    let current_input_chars = if let Some(input) = input {
+    let current_input_chars = if let Some(input) = input.first() {
         input.chars().collect()
     } else {
         vec![]
     };
+    let arg_vals = if input.len() > 1 { &input[1..] } else { &[] };
 
     let term = Term::stdout();
     let mut out_proxy = OutProxy::new();
@@ -52,6 +53,7 @@ pub fn run(root_node: &Node, input: Option<&str>) -> Result<()> {
         &term,
         &mut out_proxy,
         root_menu,
+        arg_vals,
     )?;
 
     ctrlc::set_handler(move || {
@@ -90,6 +92,7 @@ pub fn run(root_node: &Node, input: Option<&str>) -> Result<()> {
             &term,
             &mut out_proxy,
             root_menu,
+            arg_vals,
         )?;
         term.clear_last_lines(out_proxy.n_lines)?;
         out_proxy.n_lines = 0;
@@ -102,12 +105,13 @@ fn handle_node<'a>(
     term: &Term,
     out_proxy: &mut OutProxy,
     root_menu: &'a Menu,
+    arg_vals: &[String],
 ) -> Result<()> {
     match new_node {
         Some(Node::Command(c)) => {
             term.clear_last_lines(out_proxy.n_lines)?;
             term.show_cursor()?;
-            return run_command(c, term);
+            return run_command(c, term, arg_vals);
         }
         Some(Node::Menu(m)) => {
             *current_menu = m;
@@ -120,19 +124,30 @@ fn handle_node<'a>(
     Ok(())
 }
 
-fn run_command(cmd: &parser::Command, term: &Term) -> Result<()> {
+fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Result<()> {
     let mut history = load_hist().context("loading hist")?;
     debug!("Running: {cmd}");
+
+    ensure!(
+        arg_vals.len() <= cmd.env_vars.len(),
+        "Too many arguments for this command"
+    );
 
     if let Some(wd) = rt_conf::local_conf_dir() {
         env::set_current_dir(wd).context("Changing working directory")?;
     }
 
-    for var in &cmd.env_vars {
-        history = query_env_var(var, history).context("querying env var")?;
+    for i in 0..cmd.env_vars.len() {
+        let var = &cmd.env_vars[i];
+        let val = if let Some(val) = arg_vals.get(i) {
+            val
+        } else {
+            history = query_env_var(var, history).context("querying env var")?;
+            history.last().unwrap()
+        };
         // uppon calling exec, the env vars are kept, so just setting them here
         // means setting them for the callee
-        env::set_var(var, history.last().unwrap());
+        env::set_var(var, val);
     }
     term.clear_last_lines(cmd.env_vars.len())
         .context("Clearing input lines")?;

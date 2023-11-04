@@ -62,6 +62,9 @@ The following features are planned:
 
 - A configurable default shell
 - repeatable commands, usefull for brightnessctl - or +
+- fill vars from command line args
+- fix bash escape in querdied values
+- name menus
 
 ## Installation
 
