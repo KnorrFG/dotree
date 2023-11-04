@@ -1,15 +1,15 @@
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use console::{pad_str, style, Alignment, Key, Term};
 use log::debug;
 use rustyline::completion::{Completer, FilenameCompleter};
 use rustyline::config;
 use rustyline::highlight::Highlighter;
 use rustyline::{Completer, Helper, Hinter, Validator};
-use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{env, process::exit};
+use std::{fs, io};
 
 use crate::outproxy::OutProxy;
 use crate::parser::{self, Menu, Node};
@@ -58,7 +58,6 @@ pub fn run(root_node: &Node, input: &[String]) -> Result<()> {
 
     ctrlc::set_handler(move || {
         _ = Term::stderr().show_cursor();
-        exit(1);
     })?;
 
     loop {
@@ -69,7 +68,18 @@ pub fn run(root_node: &Node, input: &[String]) -> Result<()> {
         )?;
         let mut chars = current_input.take();
         debug!("Current input: {chars:?}");
-        let key = term.read_key().context("reading char")?;
+
+        let key = match term.read_key() {
+            Ok(k) => k,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {
+                term.clear_last_lines(out_proxy.n_lines)?;
+                return Ok(());
+            }
+            Err(e) => {
+                bail!("Error while waiting for key: {e:?}");
+            }
+        };
+
         debug!("got char: {key:?}");
         match key {
             Key::Char(c) => {
