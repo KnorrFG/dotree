@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pest::{
     iterators::{Pair, Pairs},
-    ParseResult, Parser,
+    Parser,
 };
 use pest_derive::Parser;
 
@@ -165,9 +165,9 @@ impl CmdBodyParser {
                 let (display_name, exec_str) = parse_quick_command(p);
                 Some(Command {
                     exec_str,
-                    settings: self.settings.take().unwrap_or(vec![]),
+                    settings: self.settings.take().unwrap_or_default(),
                     name: display_name,
-                    env_vars: self.vars.take().unwrap_or(vec![]),
+                    env_vars: self.vars.take().unwrap_or_default(),
                 })
             }
             _ => panic!("unexpected rule: {p:#?}"),
