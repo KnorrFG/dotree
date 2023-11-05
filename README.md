@@ -61,7 +61,6 @@ use dotree as a more interactive version of [just](https://github.com/casey/just
 The following features are planned:
 
 - A configurable default shell
-- repeatable commands, usefull for brightnessctl - or +
 - clean up grammar
 
 ## Installation

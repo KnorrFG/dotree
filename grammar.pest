@@ -1,7 +1,7 @@
 WHITESPACE = _{ "\t" | " " }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE}
 
-file = { SOI ~ NEWLINE* ~ (menu ~ NEWLINE*)+ ~ EOI }
+file = { SOI ~ NEWLINE* ~ shell_def? ~ NEWLINE* ~ (menu ~ NEWLINE*)+ ~ EOI }
 menu = { "menu" ~ string? ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
 OPENBR = _{"{"}
 CLOSINGBR = _{"}"}
@@ -36,5 +36,7 @@ cmd_body = { cmd_settings? ~ NEWLINE* ~ vars_def? ~ NEWLINE* ~ quick_command }
 vars_def = { "vars" ~ var_def ~ (DEF_SEP* ~ var_def)* ~ NEWLINE }
 DEF_SEP = _{"," ~ NEWLINE*}
 var_def = { symbol }
-
 cmd_settings = { "set" ~ symbol ~ (DEF_SEP* ~ symbol)* ~ NEWLINE }
+
+shell_def = {"shell" ~ (string|word)+ }
+word = @{ (!("\"" | WHITESPACE | NEWLINE) ~ ANY)+ }

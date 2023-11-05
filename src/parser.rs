@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use pest::{
     iterators::{Pair, Pairs},
@@ -39,20 +39,76 @@ pub enum CommandSetting {
     IgnoreResult,
 }
 
+#[derive(Debug)]
+pub struct ShellDef {
+    pub name: String,
+    pub args: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 struct RawMenu<'a> {
     display_name: Option<String>,
     body: Pairs<'a, Rule>,
 }
 
-pub fn parse(src: &str) -> Result<Menu> {
+trait INext: Sized {
+    fn inext(self) -> Self;
+    fn nnext(mut self, n: usize) -> Self {
+        for _ in 0..n {
+            self = self.inext();
+        }
+        self
+    }
+}
+
+impl<'a> INext for Pair<'_, Rule> {
+    fn inext(self) -> Self {
+        self.into_inner().next().unwrap()
+    }
+}
+
+fn from_string(p: Pair<'_, Rule>) -> String {
+    p.nnext(3).as_str().to_string()
+}
+
+pub fn parse(src: &str) -> Result<(Menu, Option<ShellDef>)> {
     let mut pairs = ConfigParser::parse(Rule::file, src).context("Parsing source")?;
     let file = pairs.next().unwrap();
     assert!(file.as_rule() == Rule::file);
-    let menus = file.into_inner();
-    // println!("{menus:#?}");
+    let mut menus = file.into_inner();
+    let mut shell_def = None;
+
+    if let Some(first_entry) = menus.peek() {
+        if first_entry.as_rule() == Rule::shell_def {
+            shell_def = Some(parse_shell_def(first_entry));
+            _ = menus.next();
+        }
+    }
+
     let symbols = get_symbol_table(menus);
-    parse_menu("root", &symbols)
+    let menu = parse_menu("root", &symbols)?;
+    Ok((menu, shell_def))
+}
+
+pub fn parse_shell_string(src: &str) -> Result<ShellDef> {
+    let mut pairs = ConfigParser::parse(Rule::shell_def, src).context("Parsing shell def")?;
+    Ok(parse_shell_def(pairs.next().unwrap()))
+}
+
+fn parse_shell_def(p: Pair<'_, Rule>) -> ShellDef {
+    let mut elems = VecDeque::new();
+    for p in p.into_inner() {
+        match p.as_rule() {
+            Rule::word => elems.push_back(p.as_str().to_string()),
+
+            Rule::string => elems.push_back(from_string(p)),
+            _ => panic!("unexpected rule: {p:?}"),
+        }
+    }
+    ShellDef {
+        name: elems.pop_front().unwrap(),
+        args: elems.into_iter().collect(),
+    }
 }
 
 fn get_symbol_table(pairs: Pairs<'_, Rule>) -> HashMap<&str, RawMenu<'_>> {
@@ -244,6 +300,35 @@ impl Command {
         self.settings.contains(&CommandSetting::Repeat)
     }
 }
+
+impl Default for ShellDef {
+    fn default() -> Self {
+        #[cfg(not(windows))]
+        let res = ShellDef {
+            name: "bash".into(),
+            args: vec!["-euo".into(), "pipefail".into(), "-c".into()],
+        };
+
+        #[cfg(windows)]
+        let res = ShellDef {
+            name: "cmd".into(),
+            args: vec!["/c".into()],
+        };
+
+        res
+    }
+}
+
+impl ShellDef {
+    pub fn args_with<'a>(&'a self, additional_arg: &'a str) -> Vec<&'a str> {
+        self.args
+            .iter()
+            .map(String::as_str)
+            .chain(std::iter::once(additional_arg))
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -563,5 +648,10 @@ Menu {
 "#
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_shell_parsing() {
+        k9::snapshot!(parse_shell_string("shell bash -euo pipefail -c"));
     }
 }

@@ -135,16 +135,20 @@ fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Resul
         .context("Clearing input lines")?;
     store_hist(history).context("Storing history")?;
 
+    let shell = rt_conf::shell_def();
+    debug!("shell: {shell:?}");
+    let mut args = shell.args_with(cmd.exec_str.as_str());
     if cmd.settings.contains(&CommandSetting::Repeat) {
         run_subcommand(
-            "bash",
-            &["-c", cmd.exec_str.as_str()],
+            &shell.name,
+            &args,
             cmd.settings.contains(&CommandSetting::IgnoreResult),
         )
     } else {
+        args.insert(0, &shell.name);
         Err(anyhow!(
-            "{:?}",
-            exec::execvp("bash", &["bash", "-c", cmd.exec_str.as_str()])
+            "error executing command: \n{:?}",
+            exec::execvp(&shell.name, &args)
         ))
     }
 }

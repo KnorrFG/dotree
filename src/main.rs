@@ -5,7 +5,7 @@ use clap::Parser;
 use console::Term;
 use dotree::{
     core::run,
-    parser::{self, Node},
+    parser::{self, Node, ShellDef},
     rt_conf,
 };
 
@@ -32,8 +32,6 @@ fn main() -> Result<()> {
         )
     };
 
-    rt_conf::init(local_conf_dir);
-
     if !conf_path.exists() {
         eprintln!(
             "Expected config file at {}, but couldn't find it. Please create one.",
@@ -43,14 +41,29 @@ fn main() -> Result<()> {
     }
 
     let conf_src = fs::read_to_string(conf_path).context("loading config")?;
-    let conf = parser::parse(&conf_src).context("Parsing Config")?;
+    let (menu, file_shell_def) = parser::parse(&conf_src).context("Parsing Config")?;
+
+    let env_shell = get_shell_from_env()
+        .context("Getting Shell from Env")?
+        .unwrap_or_default();
+    let shell = file_shell_def.unwrap_or(env_shell);
+    rt_conf::init(local_conf_dir, shell);
+
     let term = Term::stdout();
     term.hide_cursor()?;
-    let res = run(&Node::Menu(conf), &args.input);
+    let res = run(&Node::Menu(menu), &args.input);
     if let Err(e) = term.show_cursor() {
         eprintln!("Warning, couldn't show cursor again:\n{e:?}");
     }
     res
+}
+
+fn get_shell_from_env() -> Result<Option<ShellDef>> {
+    Ok(if let Some(src) = std::env::var("DT_DEFAULT_SHELL").ok() {
+        Some(parser::parse_shell_string(&format!("shell {src}"))?)
+    } else {
+        None
+    })
 }
 
 fn search_local_config() -> Result<Option<PathBuf>> {
