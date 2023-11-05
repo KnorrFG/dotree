@@ -417,54 +417,60 @@ mod tests {
         k9::snapshot!(
             root,
             r#"
-Menu {
-    name: "root",
-    display_name: None,
-    entries: {
-        [
-            'c',
-        ]: Menu(
-            Menu {
-                name: "custom_commands",
-                display_name: None,
-                entries: {
-                    [
-                        'c',
-                    ]: Command(
-                        Command {
-                            exec_str: "echo ciao",
-                            settings: [],
-                            name: None,
-                            env_vars: [],
-                        },
-                    ),
-                    [
-                        'h',
-                    ]: Command(
-                        Command {
-                            exec_str: "echo hi",
-                            settings: [],
-                            name: Some(
-                                "print hi",
-                            ),
-                            env_vars: [],
-                        },
-                    ),
+(
+    Menu {
+        name: "root",
+        display_name: None,
+        entries: {
+            [
+                'c',
+            ]: Menu(
+                Menu {
+                    name: "custom_commands",
+                    display_name: None,
+                    entries: {
+                        [
+                            'h',
+                        ]: Command(
+                            Command {
+                                exec_str: "echo hi",
+                                settings: [],
+                                name: Some(
+                                    "print hi",
+                                ),
+                                shell: None,
+                                env_vars: [],
+                            },
+                        ),
+                        [
+                            'c',
+                        ]: Command(
+                            Command {
+                                exec_str: "echo ciao",
+                                settings: [],
+                                name: None,
+                                shell: None,
+                                env_vars: [],
+                            },
+                        ),
+                    },
                 },
-            },
-        ),
-        [
-            'f',
-        ]: Command(
-            Command {
-                exec_str: "echo "!",
-                settings: [],
-                name: None,
-                env_vars: [],
-            },
-        ),
+            ),
+            [
+                'f',
+            ]: Command(
+                Command {
+                    exec_str: "echo "!",
+                    settings: [],
+                    name: None,
+                    shell: None,
+                    env_vars: [],
+                },
+            ),
+        },
     },
-}
+    None,
+)
 "#
         );
         Ok(())
@@ -508,22 +514,26 @@ Err(
             root,
             r#"
 Ok(
-    Menu {
-        name: "root",
-        display_name: None,
-        entries: {
-            [
-                'c',
-            ]: Command(
-                Command {
-                    exec_str: "echo foo",
-                    settings: [],
-                    name: None,
-                    env_vars: [],
-                },
-            ),
+    (
+        Menu {
+            name: "root",
+            display_name: None,
+            entries: {
+                [
+                    'c',
+                ]: Command(
+                    Command {
+                        exec_str: "echo foo",
+                        settings: [],
+                        name: None,
+                        shell: None,
+                        env_vars: [],
+                    },
+                ),
+            },
         },
-    },
+        None,
+    ),
 )
 "#
         );
@@ -536,25 +546,29 @@ Ok(
         k9::snapshot!(
             root,
             r#"
-Menu {
-    name: "root",
-    display_name: None,
-    entries: {
-        [
-            'c',
-        ]: Command(
-            Command {
-                exec_str: "echo $foo $bar",
-                settings: [],
-                name: None,
-                env_vars: [
-                    "foo",
-                    "bar",
-                ],
-            },
-        ),
+(
+    Menu {
+        name: "root",
+        display_name: None,
+        entries: {
+            [
+                'c',
+            ]: Command(
+                Command {
+                    exec_str: "echo $foo $bar",
+                    settings: [],
+                    name: None,
+                    shell: None,
+                    env_vars: [
+                        "foo",
+                        "bar",
+                    ],
+                },
+            ),
+        },
     },
-}
+    None,
+)
 "#
         );
         Ok(())
@@ -566,34 +580,38 @@ Menu {
         k9::snapshot!(
             root,
             r#"
-Menu {
-    name: "root",
-    display_name: None,
-    entries: {
-        [
-            'm',
-        ]: Menu(
-            Menu {
-                name: "menu2",
-                display_name: Some(
-                    "2nd menu",
-                ),
-                entries: {
-                    [
-                        'f',
-                    ]: Command(
-                        Command {
-                            exec_str: "echo foo",
-                            settings: [],
-                            name: None,
-                            env_vars: [],
-                        },
+(
+    Menu {
+        name: "root",
+        display_name: None,
+        entries: {
+            [
+                'm',
+            ]: Menu(
+                Menu {
+                    name: "menu2",
+                    display_name: Some(
+                        "2nd menu",
                     ),
+                    entries: {
+                        [
+                            'f',
+                        ]: Command(
+                            Command {
+                                exec_str: "echo foo",
+                                settings: [],
+                                name: None,
+                                shell: None,
+                                env_vars: [],
+                            },
+                        ),
+                    },
                 },
-            },
-        ),
+            ),
+        },
     },
-}
+    None,
+)
 "#
         );
         Ok(())
@@ -605,24 +623,28 @@ Menu {
         k9::snapshot!(
             root,
             r#"
-Menu {
-    name: "root",
-    display_name: None,
-    entries: {
-        [
-            'a',
-        ]: Command(
-            Command {
-                exec_str: "touch foo",
-                settings: [
-                    Repeat,
-                ],
-                name: None,
-                env_vars: [],
-            },
-        ),
+(
+    Menu {
+        name: "root",
+        display_name: None,
+        entries: {
+            [
+                'a',
+            ]: Command(
+                Command {
+                    exec_str: "touch foo",
+                    settings: [
+                        Repeat,
+                    ],
+                    name: None,
+                    shell: None,
+                    env_vars: [],
+                },
+            ),
+        },
     },
-}
+    None,
+)
 "#
         );
         Ok(())
@@ -634,25 +656,29 @@ Menu {
         k9::snapshot!(
             root,
             r#"
-Menu {
-    name: "root",
-    display_name: None,
-    entries: {
-        [
-            'a',
-        ]: Command(
-            Command {
-                exec_str: "touch foo",
-                settings: [
-                    Repeat,
-                    IgnoreResult,
-                ],
-                name: None,
-                env_vars: [],
-            },
-        ),
+(
+    Menu {
+        name: "root",
+        display_name: None,
+        entries: {
+            [
+                'a',
+            ]: Command(
+                Command {
+                    exec_str: "touch foo",
+                    settings: [
+                        Repeat,
+                        IgnoreResult,
+                    ],
+                    name: None,
+                    shell: None,
+                    env_vars: [],
+                },
+            ),
+        },
     },
-}
+    None,
+)
 "#
         );
         Ok(())
@@ -660,6 +686,20 @@ Menu {
 
     #[test]
     fn test_shell_parsing() {
-        k9::snapshot!(parse_shell_string("shell bash -euo pipefail -c"));
+        k9::snapshot!(
+            parse_shell_string("shell bash -euo pipefail -c"),
+            r#"
+Ok(
+    ShellDef {
+        name: "bash",
+        args: [
+            "-euo",
+            "pipefail",
+            "-c",
+        ],
+    },
+)
+"#
+        );
     }
 }
