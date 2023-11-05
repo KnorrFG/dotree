@@ -1,4 +1,4 @@
-dotree is a small interactive command runner. I want's to be a better home for your
+Dotree is a small interactive command runner. It want's to be a better home for your
 aliases and bash functions, especially those that you don't use that often, and an 
 alternative to [just](https://github.com/casey/just).
 
