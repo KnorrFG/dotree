@@ -7,7 +7,7 @@ use rustyline::{Completer, Helper, Hinter, Validator};
 use std::env;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Stdio;
+use std::process::{exit, Stdio};
 use std::{fs, io};
 
 use crate::outproxy::OutProxy;
@@ -147,12 +147,20 @@ fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Resul
             &args,
             cmd.settings.contains(&CommandSetting::IgnoreResult),
         )
-    } else {
+    } else if cfg!(not(windows)) {
         args.insert(0, &shell.name);
         Err(anyhow!(
             "error executing command: \n{:?}",
             exec::execvp(&shell.name, &args)
         ))
+    } else {
+        // windows doesn't have an exec, let's do this instead
+        run_subcommand(
+            &shell.name,
+            &args,
+            cmd.settings.contains(&CommandSetting::IgnoreResult),
+        )?;
+        exit(0);
     }
 }
 
