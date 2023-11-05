@@ -140,28 +140,32 @@ fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Resul
 
     let shell = cmd.shell.as_ref().unwrap_or_else(|| rt_conf::shell_def());
     debug!("shell: {shell:?}");
-    let mut args = shell.args_with(cmd.exec_str.as_str());
+    let args = shell.args_with(cmd.exec_str.as_str());
     if cmd.settings.contains(&CommandSetting::Repeat) {
         run_subcommand(
             &shell.name,
             &args,
             cmd.settings.contains(&CommandSetting::IgnoreResult),
         )
-    } else if cfg!(not(windows)) {
-        args.insert(0, &shell.name);
-        Err(anyhow!(
-            "error executing command: \n{:?}",
-            exec::execvp(&shell.name, &args)
-        ))
     } else {
-        // windows doesn't have an exec, let's do this instead
-        run_subcommand(
-            &shell.name,
-            &args,
-            cmd.settings.contains(&CommandSetting::IgnoreResult),
-        )?;
-        exit(0);
+        exec_cmd(&shell.name, args)
     }
+}
+
+#[cfg(not(windows))]
+fn exec_cmd<'a>(shell_name: &'a str, mut args: Vec<&'a str>) -> Result<()> {
+    args.insert(0, shell_name);
+    Err(anyhow!(
+        "error executing command: \n{:?}",
+        exec::execvp(shell_name, &args)
+    ))
+}
+
+#[cfg(windows)]
+fn exec_cmd(shell_name: &str, args: Vec<&str>) -> Result<()> {
+    // windows doesn't have an exec, let's do this instead
+    run_subcommand(shell_name, &args, false)?;
+    exit(0);
 }
 
 fn run_subcommand(prog: &str, args: &[&str], ignore_result: bool) -> Result<()> {
