@@ -5,7 +5,10 @@ set -euo pipefail
 pkg_id="$(cargo pkgid)"
 tag=${pkg_id##*#}
 
+cargo clippy -- -D warnings
 cargo test
+
+git push
 
 cargo build --release --target=x86_64-unknown-linux-musl
 strip target/x86_64-unknown-linux-musl/release/dt

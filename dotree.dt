@@ -1,0 +1,8 @@
+menu root {
+	t: "Run tests" - !"
+		export RUST_BACKTRACE=1
+		cargo clippy -- -D warnings
+		cargo test
+	"!
+	r: "Make release" - "./mk-release.bash"
+}

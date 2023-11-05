@@ -21,6 +21,12 @@ impl OutProxy {
     }
 }
 
+impl Default for OutProxy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn count_newlines(buf: &[u8]) -> usize {
     let mut count = 0;

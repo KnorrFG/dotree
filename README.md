@@ -1,7 +1,10 @@
+dotree is a small interactive command runner. I want's to be a better home for your
+aliases and bash functions, especially those that you don't use that often, and an 
+alternative to [just](https://github.com/casey/just).
+
 ![](./demo.gif)
 
-This is dotree, a small little program that reads a config file like this (following 
-platform standard, under linux it will look at `~/.config/dotree.dt`):
+Given a config file like this: 
 
 ```
 menu root {
@@ -27,7 +30,7 @@ menu misc {
 }
 ```
 
-and presents you with the options to execute the commands configured in the file
+it presents you with the options to execute the commands configured in the file
 by typing the configured key. For Example: with the given config file above, I could 
 start dotree by typing `dt` (after it was installed), and then type `gb` while dotree is
 running to execute `git switch $(git branch | fzf)` in bash. 
@@ -152,6 +155,11 @@ menu root {
 	}
 }
 ```
+
+### Alternative Config Path
+
+By default, dotree looks at a file named `dotree.dt` in the XDG config dir, you can make 
+it look somewhere else with the `-c` command line argument
 
 ## Installation
 

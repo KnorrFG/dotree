@@ -63,14 +63,14 @@ trait INext: Sized {
     }
 }
 
-impl<'a> INext for Pair<'_, Rule> {
+impl INext for Pair<'_, Rule> {
     fn inext(self) -> Self {
         self.into_inner().next().unwrap()
     }
 }
 
 fn from_string(p: Pair<'_, Rule>) -> String {
-    p.nnext(3).as_str().to_string()
+    p.nnext(2).as_str().to_string()
 }
 
 pub fn parse(src: &str) -> Result<(Menu, Option<ShellDef>)> {
@@ -121,20 +121,7 @@ fn get_symbol_table(pairs: Pairs<'_, Rule>) -> HashMap<&str, RawMenu<'_>> {
             let mut menu_elems = menu.into_inner();
             let first_child = menu_elems.next().unwrap();
             let (display_name, menu_name) = if first_child.as_rule() == Rule::string {
-                (
-                    Some(
-                        first_child
-                            .into_inner()
-                            .next()
-                            .unwrap()
-                            .into_inner()
-                            .next()
-                            .unwrap()
-                            .as_str()
-                            .to_string(),
-                    ),
-                    menu_elems.next().unwrap(),
-                )
+                (Some(from_string(first_child)), menu_elems.next().unwrap())
             } else {
                 (None, first_child)
             };
@@ -192,7 +179,7 @@ fn parse_menu(name: &str, menus: &HashMap<&str, RawMenu<'_>>) -> Result<Menu> {
 }
 
 fn parse_anon_command(p: Pair<'_, Rule>) -> Command {
-    let body = p.into_inner().next().unwrap();
+    let body = p.inext();
     let mut elems = body.into_inner();
     let mut parser = CmdBodyParser::default();
     loop {
@@ -258,30 +245,19 @@ fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<String> {
     p.into_inner()
         .map(|p| {
             assert!(p.as_rule() == Rule::var_def, "unexpected rule: {p:#?}");
-            p.into_inner().next().unwrap().as_str().to_string()
+            p.inext().as_str().to_string()
         })
         .collect()
 }
 
 fn parse_quick_command(pair: Pair<'_, Rule>) -> (Option<String>, String) {
     assert!(pair.as_rule() == Rule::quick_command);
-    let elems: Vec<_> = pair.into_inner().map(get_string_content).collect();
+    let elems: Vec<_> = pair.into_inner().map(from_string).collect();
     match elems.len() {
         1 => (None, elems[0].clone()),
         2 => (Some(elems[0].clone()), elems[1].clone()),
         _ => panic!("unexpected amount of string"),
     }
-}
-
-fn get_string_content(p: Pair<'_, Rule>) -> String {
-    let normal_or_protected = p.into_inner().next().unwrap();
-    let res = normal_or_protected
-        .into_inner()
-        .next()
-        .unwrap()
-        .as_str()
-        .to_string();
-    res
 }
 
 impl std::fmt::Display for Node {

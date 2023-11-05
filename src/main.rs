@@ -59,7 +59,7 @@ fn main() -> Result<()> {
 }
 
 fn get_shell_from_env() -> Result<Option<ShellDef>> {
-    Ok(if let Some(src) = std::env::var("DT_DEFAULT_SHELL").ok() {
+    Ok(if let Ok(src) = std::env::var("DT_DEFAULT_SHELL") {
         Some(parser::parse_shell_string(&format!("shell {src}"))?)
     } else {
         None
