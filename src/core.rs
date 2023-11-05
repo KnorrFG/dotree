@@ -50,6 +50,9 @@ pub fn run(root_node: &Node, input: &[String]) -> Result<()> {
             Node::Command(c) => {
                 if c.repeat() {
                     input_chars.pop();
+                } else {
+                    term.clear_last_lines(out_proxy.n_lines)?;
+                    term.show_cursor()?;
                 }
                 run_command(c, &term, arg_vals)?;
             }
@@ -135,7 +138,7 @@ fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Resul
         .context("Clearing input lines")?;
     store_hist(history).context("Storing history")?;
 
-    let shell = rt_conf::shell_def();
+    let shell = cmd.shell.as_ref().unwrap_or_else(|| rt_conf::shell_def());
     debug!("shell: {shell:?}");
     let mut args = shell.args_with(cmd.exec_str.as_str());
     if cmd.settings.contains(&CommandSetting::Repeat) {

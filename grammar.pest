@@ -32,11 +32,11 @@ EXCL = _{ "!" }
 
 anon_command = { "cmd" ~ NEWLINE* ~ OPENBR  
 			~ NEWLINE* ~ cmd_body ~ NEWLINE* ~ CLOSINGBR }
-cmd_body = { cmd_settings? ~ NEWLINE* ~ vars_def? ~ NEWLINE* ~ quick_command }
-vars_def = { "vars" ~ var_def ~ (DEF_SEP* ~ var_def)* ~ NEWLINE }
+cmd_body = { ((cmd_settings|vars_def|shell_def) ~ NEWLINE)* ~ quick_command }
+vars_def = { "vars" ~ var_def ~ (DEF_SEP* ~ var_def)* }
 DEF_SEP = _{"," ~ NEWLINE*}
 var_def = { symbol }
-cmd_settings = { "set" ~ symbol ~ (DEF_SEP* ~ symbol)* ~ NEWLINE }
+cmd_settings = { "set" ~ symbol ~ (DEF_SEP* ~ symbol)* }
 
 shell_def = {"shell" ~ (string|word)+ }
 word = @{ (!("\"" | WHITESPACE | NEWLINE) ~ ANY)+ }

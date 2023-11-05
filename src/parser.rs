@@ -30,6 +30,7 @@ pub struct Command {
     pub exec_str: String,
     pub settings: Vec<CommandSetting>,
     pub name: Option<String>,
+    pub shell: Option<ShellDef>,
     pub env_vars: Vec<String>,
 }
 
@@ -172,6 +173,7 @@ fn parse_menu(name: &str, menus: &HashMap<&str, RawMenu<'_>>) -> Result<Menu> {
                     name: display_name,
                     settings: vec![],
                     env_vars: vec![],
+                    shell: None,
                 })
             }
             Rule::anon_command => Node::Command(parse_anon_command(child_pair)),
@@ -204,6 +206,7 @@ fn parse_anon_command(p: Pair<'_, Rule>) -> Command {
 struct CmdBodyParser {
     settings: Option<Vec<CommandSetting>>,
     vars: Option<Vec<String>>,
+    shell_def: Option<ShellDef>,
 }
 
 impl CmdBodyParser {
@@ -217,6 +220,10 @@ impl CmdBodyParser {
                 self.vars = Some(parse_vars_def(p));
                 None
             }
+            Rule::shell_def => {
+                self.shell_def = Some(parse_shell_def(p));
+                None
+            }
             Rule::quick_command => {
                 let (display_name, exec_str) = parse_quick_command(p);
                 Some(Command {
@@ -224,6 +231,7 @@ impl CmdBodyParser {
                     settings: self.settings.take().unwrap_or_default(),
                     name: display_name,
                     env_vars: self.vars.take().unwrap_or_default(),
+                    shell: self.shell_def.take(),
                 })
             }
             _ => panic!("unexpected rule: {p:#?}"),
