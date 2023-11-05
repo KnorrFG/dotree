@@ -164,8 +164,12 @@ fn exec_cmd<'a>(shell_name: &'a str, mut args: Vec<&'a str>) -> Result<()> {
 #[cfg(windows)]
 fn exec_cmd(shell_name: &str, args: Vec<&str>) -> Result<()> {
     // windows doesn't have an exec, let's do this instead
-    run_subcommand(shell_name, &args, false)?;
-    std::process::exit(0);
+    let status = std::process::Command::new(shell_name).args(args).status()?;
+    if !status.success() {
+        Err(anyhow!("Process didn't exit successfully: {status:?}"))
+    } else {
+        std::process::exit(0);
+    }
 }
 
 fn run_subcommand(prog: &str, args: &[&str], ignore_result: bool) -> Result<()> {
