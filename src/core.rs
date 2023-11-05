@@ -7,7 +7,7 @@ use rustyline::{Completer, Helper, Hinter, Validator};
 use std::env;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::{exit, Stdio};
+use std::process::Stdio;
 use std::{fs, io};
 
 use crate::outproxy::OutProxy;
@@ -165,7 +165,7 @@ fn exec_cmd<'a>(shell_name: &'a str, mut args: Vec<&'a str>) -> Result<()> {
 fn exec_cmd(shell_name: &str, args: Vec<&str>) -> Result<()> {
     // windows doesn't have an exec, let's do this instead
     run_subcommand(shell_name, &args, false)?;
-    exit(0);
+    std::process::exit(0);
 }
 
 fn run_subcommand(prog: &str, args: &[&str], ignore_result: bool) -> Result<()> {

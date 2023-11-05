@@ -1,4 +1,5 @@
-use std::collections::{HashMap, VecDeque};
+use hashbrown::HashMap;
+use std::collections::VecDeque;
 
 use pest::{
     iterators::{Pair, Pairs},
@@ -430,6 +431,17 @@ mod tests {
                     display_name: None,
                     entries: {
                         [
+                            'c',
+                        ]: Command(
+                            Command {
+                                exec_str: "echo ciao",
+                                settings: [],
+                                name: None,
+                                shell: None,
+                                env_vars: [],
+                            },
+                        ),
+                        [
                             'h',
                         ]: Command(
                             Command {
@@ -438,17 +450,6 @@ mod tests {
                                 name: Some(
                                     "print hi",
                                 ),
-                                shell: None,
-                                env_vars: [],
-                            },
-                        ),
-                        [
-                            'c',
-                        ]: Command(
-                            Command {
-                                exec_str: "echo ciao",
-                                settings: [],
-                                name: None,
                                 shell: None,
                                 env_vars: [],
                             },
