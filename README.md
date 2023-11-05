@@ -1,7 +1,5 @@
 ![](./demo.gif)
 
-[TOC]
-
 This is dotree, a small little program that reads a config file like this (following 
 platform standard, under linux it will look at `~/.config/dotree.dt`):
 
