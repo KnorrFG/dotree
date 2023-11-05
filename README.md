@@ -1,3 +1,7 @@
+![](./demo.gif)
+
+[TOC]
+
 This is dotree, a small little program that reads a config file like this (following 
 platform standard, under linux it will look at `~/.config/dotree.dt`):
 
@@ -8,16 +12,13 @@ menu root {
 }
 
 menu git {
-	s: "git status"
-	d: "git diff"
-	c: "git commit"
 	am: "amend" - "git commit --amend --no-edit"
 	aam: "all amend" - "git commit -a --amend --no-edit"
 	ca: "git commit -a"
 	b: "git switch $(git branch | fzf)"
 	w: cmd {
 		vars output_dir, branch
-		"add worktree" - !"git worktree add -b "$branch" "$output_dir""!
+		"add worktree" - "git worktree add -b $branch $output_dir"
 	}
 }
 
@@ -48,6 +49,75 @@ An alternate form of strings are protected strings: `!"<content>"!`, in which ca
 characters between the `!` and the `"`. The characters are not mirrored on the closing 
 delimiter. So `!ab"<content>"ab!` is valid, but ~`!ab"<content>"ba!`~ is not.
 
+For an example of a real world config, [click here](./example.dt)
+
+### Command Arguments
+
+Commands can have arguments, which will be queried interactively, like this:
+
+```
+...
+menu git {
+	...
+	w: cmd {
+		vars output_dir, branch
+		"add worktree" - "git worktree add -b $branch $output_dir"
+	}
+}
+
+...
+```
+
+The values are exposed via environment variables to the callee.
+If you invoke dt with additional arguments, the additional arguments will be used as values
+for the vars. For example: `dt gw fknorr/some-feature /tmp/worktree_dir`.
+
+### Repeating Commands
+
+You can configure dotree to continue after a command was executed, so that you can trigger 
+the command again with a single keypress. This is usefull for example, if you want to 
+change screen brightness when you don't have a keyboard with appropriate keys:
+
+```
+menu root {
+	m: brightnessctl
+}
+
+menu brightnessctl {
+	+: cmd {
+		set repeat
+		"brightnessctl set +10%"
+	}
+	-: cmd {
+		set repeat
+		 "brightnessctl set -10%"
+	}
+}
+```
+
+You can also add `ignore_result` as a config option, in which case dotree won't escape
+when the command has a non-zero exit code, like this:
+
+```
+menu brightnessctl {
+...
+	+: cmd {
+		set repeat, ignore_result
+		"brightnessctl set +10%"
+	}
+...
+```
+
+### Naming Menus
+
+You can also assign a different display name to a menu, like this:
+
+```
+menu "Worktree" git_worktree {
+	...
+}
+```
+
 ### Local mode
 
 If you start dotree with -l, it will search for a dotree.dt file between the cwd and the file
@@ -56,14 +126,36 @@ working directory before executing commands, to the containing directory. This w
 use dotree as a more interactive version of [just](https://github.com/casey/just). I aliased
 `dt -l` to `dtl`
 
-## Roadmap
+### Default Shell
 
-The following features are planned:
+By default, dotree uses "bash -euo pipefail -c" as shell invocation on linux, or "cmd /c" on 
+windows. The shell string is always appended as last argument. You can change the default shell
+by setting the environment variable `DT_DEFAULT_SHELL` or on a per file basis, by placing
+a shell directive as first element in the config file like this:
 
-- A configurable default shell
-- clean up grammar
+```
+shell sh -c
+
+menu root {
+	g: git
+	m: misc
+}
+...
+```
+
+It is also possible to change the shell for a command, by putting a shell directive into a
+command like this:
+
+```
+menu root {
+	p: cmd {
+		shell python -c
+		"python hi" - !"print("hello from python")"!
+	}
+}
+```
 
 ## Installation
 
-For now, you will have to either clone the repo, and run `cargo install --path <repo-path>`
-or `cargo install --git https://github.com/knorrfg/dotree`.
+Download the appropriate binary for your platform (windows is untested) from the release page, 
+or install via cargo: `cargo install --git https://github.com/knorrfg/dotree`.

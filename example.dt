@@ -1,0 +1,75 @@
+menu root {
+	g: git
+	m: misc
+	r: rust
+	c: config
+}
+
+menu config {
+	b: "bash base" - "helix $DOTFILES/bash/base_config.bash"
+	l: "bash local" - "helix ~/.bashrc.local"
+	i: "i3" - "nvim ~/.config/i3/config"
+	d: "dotree" - "helix ~/.config/dotree.dt"
+	n: "nvim" - "nvim ~/.config/nvim/init.lua"
+}
+
+menu rust {
+	c: "check paged" - "cargo check --color always 2>&1 | less -r"
+	l: "count lines" - "fd -ers -X cloc"
+	i: "install package" - "cargo install --path ."
+}
+
+menu git {
+	am: "amend staged" - "git commit --amend --no-edit"
+	aam: "amend all" - "git commit -a --amend --no-edit"
+	b: "git switch $(git branch | fzf)"
+	w: git_worktree
+}
+
+menu git_worktree {
+	a:  cmd {
+		vars output_dir, branch
+		!"git worktree add -b "$branch" "$output_dir""!
+	}
+	l: "list" - "git worktree list"
+	p: "prune" - "git worktree prune"
+}
+
+menu misc {
+	s: "systemctl suspend"
+	mh: cmd{
+		vars file
+		"md2html" - !"
+			echo converting $file
+			pandoc "$file" -c ~/Sync/share/pandoc.css --toc --standalone \
+				--embed-resources -so "${file%.md}.html"
+		"! 	
+	} 
+	th: cmd {
+		vars file, expected_hash
+		"test md5 hash" - !"
+		    if [[ `md5sum $file | awk '{print $1}'` == $expected_hash ]]; then
+		        echo 'success'
+		    else
+		        echo 'fail'; exit 1
+		    fi
+		"!
+	}
+	r: cmd {
+		vars pattern, replacement
+		"grep replace" - !"
+		  for f in $(rg "$pattern" -l); do   
+		    sed "s/$pattern/$replacement/g" -i $f
+		  done
+		"!
+	}
+	x: cmd {
+		vars file
+		"extract" - !"7z x "$file" "-o${file}.d""!
+	}
+	p: cmd {
+		vars pat
+		"ps -e | grep -i $pat"
+	}
+}
+
