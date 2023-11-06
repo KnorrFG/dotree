@@ -1,4 +1,4 @@
-Dotree is a small interactive command runner. It want's to be a better home for your
+Dotree is a small interactive command runner. It wants to be a better home for your
 aliases and bash functions, especially those that you don't use that often, and an 
 alternative to [just](https://github.com/casey/just).
 
@@ -35,7 +35,7 @@ by typing the configured key. For Example: with the given config file above, I c
 start dotree by typing `dt` (after it was installed), and then type `gb` while dotree is
 running to execute `git switch $(git branch | fzf)` in bash. 
 
-Alternativly you can also do that by entering `dt gb`. If you provide an argument, it's
+Alternativly you can also do that by entering `dt gb`. If you provide an argument, its
 characters will be processed as if you typed them when the program is running.
 
 A command can either be declared as quick command, i.e. a string that contains bash code,
