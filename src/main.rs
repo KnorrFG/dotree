@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, process::exit};
+use std::{env, fs, path::PathBuf, process::exit};
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         (p, None)
     } else {
         (
-            dirs::config_dir()
+            get_default_config_dir()
                 .ok_or(anyhow!("Couldn't determin config dir"))?
                 .join("dotree.dt"),
             None,
@@ -56,6 +56,14 @@ fn main() -> Result<()> {
         eprintln!("Warning, couldn't show cursor again:\n{e:?}");
     }
     res
+}
+
+fn get_default_config_dir() -> Option<PathBuf> {
+    if let Ok(path) = env::var("XDG_CONFIG_HOME") {
+        Some(path.into())
+    } else {
+        dirs::config_dir()
+    }
 }
 
 fn get_shell_from_env() -> Result<Option<ShellDef>> {
