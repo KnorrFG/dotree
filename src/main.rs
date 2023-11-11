@@ -5,7 +5,7 @@ use clap::Parser;
 use console::Term;
 use dotree::{
     core::run,
-    parser::{self, Node, ShellDef},
+    parser::{self, Config, Node, ShellDef},
     rt_conf,
 };
 
@@ -41,7 +41,11 @@ fn main() -> Result<()> {
     }
 
     let conf_src = fs::read_to_string(conf_path).context("loading config")?;
-    let (menu, file_shell_def) = parser::parse(&conf_src).context("Parsing Config")?;
+    let Config {
+        menu,
+        shell_def: file_shell_def,
+        snippet_table,
+    } = parser::parse(&conf_src).context("Parsing Config")?;
 
     let env_shell = get_shell_from_env()
         .context("Getting Shell from Env")?
@@ -51,7 +55,7 @@ fn main() -> Result<()> {
 
     let term = Term::stdout();
     term.hide_cursor()?;
-    let res = run(&Node::Menu(menu), &args.input);
+    let res = run(&Node::Menu(menu), &args.input, &snippet_table);
     if let Err(e) = term.show_cursor() {
         eprintln!("Warning, couldn't show cursor again:\n{e:?}");
     }

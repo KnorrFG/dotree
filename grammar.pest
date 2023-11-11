@@ -1,13 +1,13 @@
 WHITESPACE = _{ "\t" | " " }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE}
 
-file = { SOI ~ NEWLINE* ~ shell_def? ~ NEWLINE* ~ (menu ~ NEWLINE*)+ ~ EOI }
+file = { SOI ~ NEWLINE* ~ shell_def? ~ NEWLINE* ~ ((menu|snippet) ~ NEWLINE*)+ ~ EOI }
 menu = { "menu" ~ string? ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
 OPENBR = _{"{"}
 CLOSINGBR = _{"}"}
 
 menu_body = { (NEWLINE* ~ entry ~ NEWLINE*)+ }
-entry = { keydef ~ ":" ~ (anon_command | symbol | quick_command)}
+entry = { keydef ~ ":" ~ (anon_command | quick_command | symbol)}
 keydef = @{ (!(":" | WHITESPACE | NEWLINE) ~ ANY)* }
 symbol = @{ (ASCII_ALPHANUMERIC | "_")+ }
 string = { normal_string  | protected_string }
@@ -24,7 +24,7 @@ QUOTE = _{ "\"" }
 protected_string = ${(sep_start ~ protected_content ~ sep_end)} 
 protected_content = @{ (!("\"" ~ PEEK ~ "!") ~ ANY)* }
 
-quick_command = {string ~ ("-" ~ string)?}
+quick_command = {(string ~ "-")? ~ string_expr}
 
 sep_start = _{ EXCL ~ PUSH((!"\"" ~ ANY)*) ~ QUOTE}
 sep_end = _{ QUOTE ~ POP ~ EXCL }
@@ -40,3 +40,8 @@ cmd_settings = { "set" ~ symbol ~ (DEF_SEP* ~ symbol)* }
 
 shell_def = {"shell" ~ (string|word)+ }
 word = @{ (!("\"" | WHITESPACE | NEWLINE) ~ ANY)+ }
+
+snippet = { "snippet" ~ NEWLINE* ~ symbol ~ "=" ~ string_expr}
+string_expr = { string_expr_elem ~ (NEWLINE* ~ "+" ~ NEWLINE* ~ string_expr_elem)*}
+string_expr_elem = { string | snippet_symbol }
+snippet_symbol = @{"$" ~ symbol}

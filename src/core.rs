@@ -11,7 +11,7 @@ use std::process::Stdio;
 use std::{fs, io};
 
 use crate::outproxy::OutProxy;
-use crate::parser::{self, CommandSetting, Menu, Node};
+use crate::parser::{self, CommandSetting, Menu, Node, SnippetTable};
 use crate::rt_conf;
 
 #[derive(Debug, Clone)]
@@ -21,7 +21,7 @@ enum Submenus<'a> {
     None,
 }
 
-pub fn run(root_node: &Node, input: &[String]) -> Result<()> {
+pub fn run(root_node: &Node, input: &[String], snippet_table: &SnippetTable) -> Result<()> {
     let mut input_chars = if let Some(input) = input.first() {
         input.chars().collect()
     } else {
@@ -54,7 +54,7 @@ pub fn run(root_node: &Node, input: &[String]) -> Result<()> {
                     term.clear_last_lines(out_proxy.n_lines)?;
                     term.show_cursor()?;
                 }
-                run_command(c, &term, arg_vals)?;
+                run_command(c, &term, arg_vals, snippet_table)?;
             }
             Node::Menu(m) => {
                 term.clear_last_lines(out_proxy.n_lines)?;
@@ -109,7 +109,12 @@ fn get_input(input_chars: &mut Vec<char>, term: &Term) -> Result<Exit> {
     Ok(false)
 }
 
-fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Result<()> {
+fn run_command(
+    cmd: &parser::Command,
+    term: &Term,
+    arg_vals: &[String],
+    snippet_table: &SnippetTable,
+) -> Result<()> {
     let mut history = load_hist().context("loading hist")?;
     debug!("Running: {cmd}");
 
@@ -140,7 +145,11 @@ fn run_command(cmd: &parser::Command, term: &Term, arg_vals: &[String]) -> Resul
 
     let shell = cmd.shell.as_ref().unwrap_or_else(|| rt_conf::shell_def());
     debug!("shell: {shell:?}");
-    let args = shell.args_with(cmd.exec_str.as_str());
+    let arg = cmd
+        .exec_str
+        .resolve(snippet_table)
+        .context(format!("resolving {}", cmd.exec_str))?;
+    let args = shell.args_with(arg.as_str());
     if cmd.settings.contains(&CommandSetting::Repeat) {
         run_subcommand(
             &shell.name,

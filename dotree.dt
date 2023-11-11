@@ -9,4 +9,6 @@ menu root {
 		cargo build --release --target=x86_64-pc-windows-gnu
 		strip target/x86_64-pc-windows-gnu/release/dt.exe
 	"!
+	b: "bash tests" - "cargo test --test bash_tests"
+	k: "update k9" - "K9_UPDATE_SNAPSHOTS=1 cargo test"
 }

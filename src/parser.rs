@@ -7,28 +7,28 @@ use pest::{
 };
 use pest_derive::Parser;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 struct ConfigParser;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Menu(Menu),
     Command(Command),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Menu {
     pub name: String,
     pub display_name: Option<String>,
     pub entries: HashMap<Vec<char>, Node>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Command {
-    pub exec_str: String,
+    pub exec_str: StringExpr,
     pub settings: Vec<CommandSetting>,
     pub name: Option<String>,
     pub shell: Option<ShellDef>,
@@ -41,7 +41,7 @@ pub enum CommandSetting {
     IgnoreResult,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShellDef {
     pub name: String,
     pub args: Vec<String>,
@@ -52,6 +52,24 @@ struct RawMenu<'a> {
     display_name: Option<String>,
     body: Pairs<'a, Rule>,
 }
+
+#[derive(Debug, Clone)]
+pub enum StringExprElem {
+    Symbol(String),
+    String(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub menu: Menu,
+    pub shell_def: Option<ShellDef>,
+    pub snippet_table: SnippetTable,
+}
+
+#[derive(Debug, Clone)]
+pub struct StringExpr(Vec<StringExprElem>);
+
+pub type SnippetTable = HashMap<String, StringExpr>;
 
 trait INext: Sized {
     fn inext(self) -> Self;
@@ -73,23 +91,43 @@ fn from_string(p: Pair<'_, Rule>) -> String {
     p.nnext(2).as_str().to_string()
 }
 
-pub fn parse(src: &str) -> Result<(Menu, Option<ShellDef>)> {
+pub fn parse(src: &str) -> Result<Config> {
     let mut pairs = ConfigParser::parse(Rule::file, src).context("Parsing source")?;
     let file = pairs.next().unwrap();
     assert!(file.as_rule() == Rule::file);
-    let mut menus = file.into_inner();
+    let mut entries = file.into_inner();
     let mut shell_def = None;
 
-    if let Some(first_entry) = menus.peek() {
+    if let Some(first_entry) = entries.peek() {
         if first_entry.as_rule() == Rule::shell_def {
             shell_def = Some(parse_shell_def(first_entry));
-            _ = menus.next();
+            _ = entries.next();
         }
     }
 
-    let symbols = get_symbol_table(menus);
-    let menu = parse_menu("root", &symbols)?;
-    Ok((menu, shell_def))
+    let menus = get_menu_table(entries.clone());
+    let snippet_table = get_snippet_table(entries);
+    let menu = parse_menu("root", &menus)?;
+
+    Ok(Config {
+        menu,
+        shell_def,
+        snippet_table,
+    })
+}
+
+fn get_snippet_table(entries: Pairs<'_, Rule>) -> HashMap<String, StringExpr> {
+    let mut res = HashMap::new();
+    for e in entries {
+        if e.as_rule() == Rule::snippet {
+            let mut e = e.into_inner();
+            res.insert(
+                e.next().unwrap().as_str().to_string(),
+                parse_string_expr(e.next().unwrap()),
+            );
+        }
+    }
+    res
 }
 
 pub fn parse_shell_string(src: &str) -> Result<ShellDef> {
@@ -113,10 +151,10 @@ fn parse_shell_def(p: Pair<'_, Rule>) -> ShellDef {
     }
 }
 
-fn get_symbol_table(pairs: Pairs<'_, Rule>) -> HashMap<&str, RawMenu<'_>> {
+fn get_menu_table(pairs: Pairs<'_, Rule>) -> HashMap<&str, RawMenu<'_>> {
     pairs
         .into_iter()
-        .filter(|x| x.as_rule() != Rule::EOI)
+        .filter(|x| x.as_rule() == Rule::menu)
         .map(|menu| {
             let mut menu_elems = menu.into_inner();
             let first_child = menu_elems.next().unwrap();
@@ -250,14 +288,33 @@ fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<String> {
         .collect()
 }
 
-fn parse_quick_command(pair: Pair<'_, Rule>) -> (Option<String>, String) {
+fn parse_quick_command(pair: Pair<'_, Rule>) -> (Option<String>, StringExpr) {
     assert!(pair.as_rule() == Rule::quick_command);
-    let elems: Vec<_> = pair.into_inner().map(from_string).collect();
+    let elems: Vec<_> = pair.into_inner().collect();
     match elems.len() {
-        1 => (None, elems[0].clone()),
-        2 => (Some(elems[0].clone()), elems[1].clone()),
+        1 => (None, parse_string_expr(elems[0].clone())),
+        2 => (
+            Some(from_string(elems[0].clone())),
+            parse_string_expr(elems[1].clone()),
+        ),
         _ => panic!("unexpected amount of string"),
     }
+}
+
+fn parse_string_expr(p: Pair<'_, Rule>) -> StringExpr {
+    let mut res = vec![];
+    for e in p.into_inner() {
+        assert!(e.as_rule() == Rule::string_expr_elem);
+        let actual_elem = e.inext();
+        match actual_elem.as_rule() {
+            Rule::string => res.push(StringExprElem::String(from_string(actual_elem))),
+            Rule::snippet_symbol => res.push(StringExprElem::Symbol(
+                actual_elem.as_str()[1..].to_string(),
+            )),
+            _ => panic!("unexpected symbol"),
+        }
+    }
+    StringExpr(res)
 }
 
 impl std::fmt::Display for Node {
@@ -269,14 +326,27 @@ impl std::fmt::Display for Node {
     }
 }
 
+impl std::fmt::Display for StringExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let elems: Vec<_> = self
+            .0
+            .iter()
+            .map(|x| match x {
+                StringExprElem::Symbol(s) => s.clone(),
+                StringExprElem::String(s) => format!("{s:?}"),
+            })
+            .collect();
+        write!(f, "{}", elems.join(" + "))
+    }
+}
+
 impl std::fmt::Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let v = if let Some(name) = &self.name {
-            name
+        if let Some(name) = &self.name {
+            write!(f, "{name}")
         } else {
-            &self.exec_str
-        };
-        write!(f, "{v}")
+            write!(f, "{}", self.exec_str)
+        }
     }
 }
 
@@ -311,6 +381,35 @@ impl ShellDef {
             .map(String::as_str)
             .chain(std::iter::once(additional_arg))
             .collect()
+    }
+}
+
+impl StringExpr {
+    pub fn resolve(&self, snippet_table: &SnippetTable) -> Result<String> {
+        self.inner_resolve(snippet_table, vec![])
+    }
+
+    fn inner_resolve(&self, snippet_table: &SnippetTable, parents: Vec<String>) -> Result<String> {
+        let elems: Vec<_> = self
+            .0
+            .iter()
+            .map(|x| match x {
+                StringExprElem::Symbol(s) => {
+                    let snip = snippet_table
+                        .get(s)
+                        .ok_or(anyhow!("Undefined snippet: {s}"))?;
+                    let mut parents = parents.clone();
+                    ensure!(
+                        !parents.contains(s),
+                        "Detected cycle while resolving String Expression: {parents:?}"
+                    );
+                    parents.push(s.clone());
+                    snip.inner_resolve(snippet_table, parents)
+                }
+                StringExprElem::String(s) => Ok(s.clone()),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(elems.join(""))
     }
 }
 
@@ -394,8 +493,8 @@ mod tests {
         k9::snapshot!(
             root,
             r#"
-(
-    Menu {
+Config {
+    menu: Menu {
         name: "root",
         display_name: None,
         entries: {
@@ -410,7 +509,13 @@ mod tests {
                             'c',
                         ]: Command(
                             Command {
-                                exec_str: "echo ciao",
+                                exec_str: StringExpr(
+                                    [
+                                        String(
+                                            "echo ciao",
+                                        ),
+                                    ],
+                                ),
                                 settings: [],
                                 name: None,
                                 shell: None,
@@ -421,7 +526,13 @@ mod tests {
                             'h',
                         ]: Command(
                             Command {
-                                exec_str: "echo hi",
+                                exec_str: StringExpr(
+                                    [
+                                        String(
+                                            "echo hi",
+                                        ),
+                                    ],
+                                ),
                                 settings: [],
                                 name: Some(
                                     "print hi",
@@ -437,7 +548,13 @@ mod tests {
                 'f',
             ]: Command(
                 Command {
-                    exec_str: "echo "!",
+                    exec_str: StringExpr(
+                        [
+                            String(
+                                "echo "!",
+                            ),
+                        ],
+                    ),
                     settings: [],
                     name: None,
                     shell: None,
@@ -446,8 +563,9 @@ mod tests {
             ),
         },
     },
-    None,
-)
+    shell_def: None,
+    snippet_table: {},
+}
 "#
         );
         Ok(())
@@ -491,8 +609,8 @@ Err(
             root,
             r#"
 Ok(
-    (
-        Menu {
+    Config {
+        menu: Menu {
             name: "root",
             display_name: None,
             entries: {
@@ -500,7 +618,13 @@ Ok(
                     'c',
                 ]: Command(
                     Command {
-                        exec_str: "echo foo",
+                        exec_str: StringExpr(
+                            [
+                                String(
+                                    "echo foo",
+                                ),
+                            ],
+                        ),
                         settings: [],
                         name: None,
                         shell: None,
@@ -509,8 +633,9 @@ Ok(
                 ),
             },
         },
-        None,
-    ),
+        shell_def: None,
+        snippet_table: {},
+    },
 )
 "#
         );
@@ -523,8 +648,8 @@ Ok(
         k9::snapshot!(
             root,
             r#"
-(
-    Menu {
+Config {
+    menu: Menu {
         name: "root",
         display_name: None,
         entries: {
@@ -532,7 +657,13 @@ Ok(
                 'c',
             ]: Command(
                 Command {
-                    exec_str: "echo $foo $bar",
+                    exec_str: StringExpr(
+                        [
+                            String(
+                                "echo $foo $bar",
+                            ),
+                        ],
+                    ),
                     settings: [],
                     name: None,
                     shell: None,
@@ -544,8 +675,9 @@ Ok(
             ),
         },
     },
-    None,
-)
+    shell_def: None,
+    snippet_table: {},
+}
 "#
         );
         Ok(())
@@ -557,8 +689,8 @@ Ok(
         k9::snapshot!(
             root,
             r#"
-(
-    Menu {
+Config {
+    menu: Menu {
         name: "root",
         display_name: None,
         entries: {
@@ -575,7 +707,13 @@ Ok(
                             'f',
                         ]: Command(
                             Command {
-                                exec_str: "echo foo",
+                                exec_str: StringExpr(
+                                    [
+                                        String(
+                                            "echo foo",
+                                        ),
+                                    ],
+                                ),
                                 settings: [],
                                 name: None,
                                 shell: None,
@@ -587,8 +725,9 @@ Ok(
             ),
         },
     },
-    None,
-)
+    shell_def: None,
+    snippet_table: {},
+}
 "#
         );
         Ok(())
@@ -600,8 +739,8 @@ Ok(
         k9::snapshot!(
             root,
             r#"
-(
-    Menu {
+Config {
+    menu: Menu {
         name: "root",
         display_name: None,
         entries: {
@@ -609,7 +748,13 @@ Ok(
                 'a',
             ]: Command(
                 Command {
-                    exec_str: "touch foo",
+                    exec_str: StringExpr(
+                        [
+                            String(
+                                "touch foo",
+                            ),
+                        ],
+                    ),
                     settings: [
                         Repeat,
                     ],
@@ -620,8 +765,9 @@ Ok(
             ),
         },
     },
-    None,
-)
+    shell_def: None,
+    snippet_table: {},
+}
 "#
         );
         Ok(())
@@ -633,8 +779,8 @@ Ok(
         k9::snapshot!(
             root,
             r#"
-(
-    Menu {
+Config {
+    menu: Menu {
         name: "root",
         display_name: None,
         entries: {
@@ -642,7 +788,13 @@ Ok(
                 'a',
             ]: Command(
                 Command {
-                    exec_str: "touch foo",
+                    exec_str: StringExpr(
+                        [
+                            String(
+                                "touch foo",
+                            ),
+                        ],
+                    ),
                     settings: [
                         Repeat,
                         IgnoreResult,
@@ -654,8 +806,9 @@ Ok(
             ),
         },
     },
-    None,
-)
+    shell_def: None,
+    snippet_table: {},
+}
 "#
         );
         Ok(())
@@ -678,5 +831,35 @@ Ok(
 )
 "#
         );
+    }
+
+    #[test]
+    fn test_snippet_parsing() -> Result<()> {
+        k9::snapshot!(
+            parse_string_expr(
+                ConfigParser::parse(Rule::string_expr, r#"$a + "b" + $c + "d""#,)?
+                    .next()
+                    .unwrap()
+            ),
+            r#"
+StringExpr(
+    [
+        Symbol(
+            "a",
+        ),
+        String(
+            "b",
+        ),
+        Symbol(
+            "c",
+        ),
+        String(
+            "d",
+        ),
+    ],
+)
+"#
+        );
+        Ok(())
     }
 }

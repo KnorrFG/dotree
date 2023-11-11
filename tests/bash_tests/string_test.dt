@@ -1,0 +1,7 @@
+snippet vars = !"
+FOO="foo"	
+"!
+
+menu root {
+	e: $vars + "echo foo=$FOO"
+}
