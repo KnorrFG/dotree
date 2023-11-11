@@ -2,6 +2,12 @@ snippet vars = !"
 FOO="foo"	
 "!
 
+snippet a_fn = " # we want a newline here
+append_foo() { 
+	echo $1 foo
+}
+" # and here
+
 menu root {
-	e: $vars + "echo foo=$FOO"
+	e: $vars + "echo foo=$FOO" + $a_fn + "append_foo $FOO"
 }

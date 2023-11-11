@@ -161,6 +161,42 @@ menu root {
 By default, dotree looks at a file named `dotree.dt` in the XDG config dir, you can make 
 it look somewhere else with the `-c` command line argument
 
+### Snippets 
+
+To share code between multiple commands, you can define snippets:
+
+```
+snippet shared_vars = !"
+	a_var=a_value
+	b_var=b_value
+"!
+
+menu root {
+	e: $shared_vars + "echo $a_var"
+}
+```
+
+A snippet can be referenced by its name prefixed with a `$`. You use them in the definition
+of commands or in the definition of snippets. The can occur in any order like this:
+
+```
+snippet vars = !"
+FOO="foo"	
+"!
+
+snippet a_fn = " # we want a newline here
+append_foo() { 
+	echo $1 foo
+}
+" # and here, since strings are simpli concatenated, and bash needs those newlines
+  # alternatively, we could use a ; in the command
+
+menu root {
+	e: $vars + "echo foo=$FOO" + $a_fn + "append_foo $FOO"
+}
+	
+```
+
 ## Installation
 
 Download the appropriate binary for your platform (windows is untested) from the release page, 
