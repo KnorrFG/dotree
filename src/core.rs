@@ -132,12 +132,12 @@ fn run_command(
         let val = if let Some(val) = arg_vals.get(i) {
             val
         } else {
-            history = query_env_var(var, history).context("querying env var")?;
+            history = query_env_var(&var.name, &var.value, history).context("querying env var")?;
             history.last().unwrap()
         };
         // uppon calling exec, the env vars are kept, so just setting them here
         // means setting them for the callee
-        env::set_var(var, val);
+        env::set_var(&var.name, val);
     }
     term.clear_last_lines(cmd.env_vars.len() - arg_vals.len())
         .context("Clearing input lines")?;
@@ -233,7 +233,11 @@ struct RlHelper {
 }
 impl Highlighter for RlHelper {}
 
-fn query_env_var(name: &str, mut hist: Vec<String>) -> Result<Vec<String>> {
+fn query_env_var(
+    name: &str,
+    default_val: &Option<String>,
+    mut hist: Vec<String>,
+) -> Result<Vec<String>> {
     let mut rl = rustyline::Editor::new()?;
     rl.set_helper(Some(RlHelper {
         completer: FilenameCompleter::new(),
@@ -241,8 +245,22 @@ fn query_env_var(name: &str, mut hist: Vec<String>) -> Result<Vec<String>> {
     for h in &hist {
         rl.add_history_entry(h)?;
     }
-    let line = rl.readline(&format!("Value for {name}: "))?;
-    hist.push(line);
+    let line = rl.readline(&format!(
+        "Value for {name}{default}: ",
+        default = if let Some(default_val) = default_val {
+            format!(" ({default_val})")
+        } else {
+            String::new()
+        }
+    ))?;
+
+    if line.is_empty() {
+        if let Some(default_val) = default_val {
+            hist.push(default_val.to_string());
+        }
+    } else {
+        hist.push(line);
+    }
     Ok(hist)
 }
 

@@ -32,7 +32,7 @@ pub struct Command {
     pub settings: Vec<CommandSetting>,
     pub name: Option<String>,
     pub shell: Option<ShellDef>,
-    pub env_vars: Vec<String>,
+    pub env_vars: Vec<VarDef>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -45,6 +45,12 @@ pub enum CommandSetting {
 pub struct ShellDef {
     pub name: String,
     pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VarDef {
+    pub name: String,
+    pub value: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -231,7 +237,7 @@ fn parse_anon_command(p: Pair<'_, Rule>) -> Command {
 #[derive(Default)]
 struct CmdBodyParser {
     settings: Option<Vec<CommandSetting>>,
-    vars: Option<Vec<String>>,
+    vars: Option<Vec<VarDef>>,
     shell_def: Option<ShellDef>,
 }
 
@@ -278,14 +284,25 @@ fn parse_cmd_settings(p: Pair<'_, Rule>) -> Vec<CommandSetting> {
     res
 }
 
-fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<String> {
+fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<VarDef> {
+    fn parse_var_def(p: Pair<'_, Rule>) -> VarDef {
+        assert!(p.as_rule() == Rule::var_def, "unexpected rule: {p:#?}");
+        let mut p = p.into_inner();
+        let name_def = p.next().unwrap();
+        let value_def = p.next();
+
+        let name = name_def.as_str().to_string();
+        let value = value_def.map(|v| {
+            assert!(v.as_rule() == Rule::default_var, "unexpected rule: {p:#?}");
+            // v(default_var) -> normal_string -> normal_content
+            v.inext().inext().as_str().to_string()
+        });
+
+        VarDef { name, value }
+    }
+
     assert!(p.as_rule() == Rule::vars_def);
-    p.into_inner()
-        .map(|p| {
-            assert!(p.as_rule() == Rule::var_def, "unexpected rule: {p:#?}");
-            p.inext().as_str().to_string()
-        })
-        .collect()
+    p.into_inner().map(parse_var_def).collect()
 }
 
 fn parse_quick_command(pair: Pair<'_, Rule>) -> (Option<String>, StringExpr) {
