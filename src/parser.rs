@@ -294,8 +294,7 @@ fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<VarDef> {
         let name = name_def.as_str().to_string();
         let value = value_def.map(|v| {
             assert!(v.as_rule() == Rule::default_var, "unexpected rule: {p:#?}");
-            // v(default_var) -> normal_string -> normal_content
-            v.inext().inext().as_str().to_string()
+            from_string(v.inext())
         });
 
         VarDef { name, value }
@@ -685,8 +684,14 @@ Config {
                     name: None,
                     shell: None,
                     env_vars: [
-                        "foo",
-                        "bar",
+                        VarDef {
+                            name: "foo",
+                            value: None,
+                        },
+                        VarDef {
+                            name: "bar",
+                            value: None,
+                        },
                     ],
                 },
             ),

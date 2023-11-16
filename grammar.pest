@@ -36,7 +36,7 @@ cmd_body = { ((cmd_settings|vars_def|shell_def) ~ NEWLINE)* ~ quick_command }
 vars_def = { "vars" ~ var_def ~ (DEF_SEP* ~ var_def)* }
 DEF_SEP = _{"," ~ NEWLINE*}
 var_def = { symbol ~ default_var? }
-default_var = { "=" ~ normal_string }
+default_var = { "=" ~ string }
 cmd_settings = { "set" ~ symbol ~ (DEF_SEP* ~ symbol)* }
 
 shell_def = {"shell" ~ (string|word)+ }

@@ -1,0 +1,6 @@
+menu root {
+	f: cmd {
+		vars a, b, c="foo"
+		"echo $a $b $c"
+	}
+}

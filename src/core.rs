@@ -257,10 +257,10 @@ fn query_env_var(
     if line.is_empty() {
         if let Some(default_val) = default_val {
             hist.push(default_val.to_string());
+            return Ok(hist);
         }
-    } else {
-        hist.push(line);
     }
+    hist.push(line);
     Ok(hist)
 }
 
