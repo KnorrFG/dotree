@@ -30,12 +30,12 @@ menu misc {
 }
 ```
 
-it presents you with the options to execute the commands configured in the file
+It presents you with the options to execute the commands configured in the file
 by typing the configured key. For Example: with the given config file above, I could 
 start dotree by typing `dt` (after it was installed), and then type `gb` while dotree is
 running to execute `git switch $(git branch | fzf)` in bash. 
 
-Alternativly you can also do that by entering `dt gb`. If you provide an argument, its
+Alternatively you can also do that by entering `dt gb`. If you provide an argument, its
 characters will be processed as if you typed them when the program is running.
 
 A command can either be declared as quick command, i.e. a string that contains bash code,
@@ -46,7 +46,7 @@ To query the input, [rustyline](https://github.com/kkawakam/rustyline) is used, 
 path completion and a history.
 
 An alternate form of strings are protected strings: `!"<content>"!`, in which case you can use 
-`"` freely within the string. and in case you even need `!"` in a string, you can add any
+`"` freely within the string. And in case you even need `!"` in a string, you can add any
 characters between the `!` and the `"`. The characters are not mirrored on the closing 
 delimiter. So `!ab"<content>"ab!` is valid, but ~`!ab"<content>"ba!`~ is not.
 
@@ -73,10 +73,26 @@ The values are exposed via environment variables to the callee.
 If you invoke dt with additional arguments, the additional arguments will be used as values
 for the vars. For example: `dt gw fknorr/some-feature /tmp/worktree_dir`.
 
+You can also assign default values for variables like this:
+
+```
+menu root {
+	f: cmd {
+		vars a, b, c="foo"
+		"echo $a $b $c"
+	}
+}
+```
+
+Vars with default values will be queried, but if you just press enter,
+the default value will be used. They will not be used if you pass the values
+via arguments. I.e., if you call the above example with `dtl f alpha beta`, it will still ask
+for a value for c interactively.
+
 ### Repeating Commands
 
 You can configure dotree to continue after a command was executed, so that you can trigger 
-the command again with a single keypress. This is usefull for example, if you want to 
+the command again with a single key press. This is useful for example, if you want to 
 change screen brightness when you don't have a keyboard with appropriate keys:
 
 ```
@@ -130,8 +146,8 @@ use dotree as a more interactive version of [just](https://github.com/casey/just
 ### Default Shell
 
 By default, dotree uses "bash -euo pipefail -c" as shell invocation on linux, or "cmd /c" on 
-windows. The shell string is always appended as last argument. You can change the default shell
-by setting the environment variable `DT_DEFAULT_SHELL` or on a per file basis, by placing
+Windows. The shell string is always appended as last argument. You can change the default shell
+by setting the environment variable `DT_DEFAULT_SHELL` or on a per-file basis, by placing
 a shell directive as first element in the config file like this:
 
 ```
