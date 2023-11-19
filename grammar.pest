@@ -33,7 +33,9 @@ QUOTE = _{ "\"" }
 protected_string = ${(sep_start ~ protected_content ~ sep_end)} 
 protected_content = @{ (!("\"" ~ PEEK ~ "!") ~ ANY)* }
 
-quick_command = {(string ~ "-")? ~ string_expr}
+quick_command = {command_name? ~ ECHO_TOGGLE_TOKEN? ~ string_expr}
+command_name = { (string ~ "-") }
+ECHO_TOGGLE_TOKEN = {"@"}
 
 sep_start = _{ EXCL ~ PUSH((!"\"" ~ ANY)*) ~ QUOTE}
 sep_end = _{ QUOTE ~ POP ~ EXCL }

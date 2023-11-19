@@ -125,6 +125,26 @@ menu brightnessctl {
 ...
 ```
 
+### Echoing Commands 
+
+By default, dotree will echo the command it executes to stderr (this behavior change was introduced in 0.8.0).
+If you don't like that, you can add `echo off` to the top of the file, like this:
+
+```
+echo off
+
+menu root {
+	n: "echo don\'t show me"
+	y: "echo 'show me' without echoing the command" - @"echo show me"
+}
+```
+
+This will switch the default behavior to not echoing the executed command. Before a command, you can 
+add an `@`, which will toggle the default behavior, i.e. if you have an `echo off` at the top of 
+your file, then commands with `@` will be echoed. If you do not have `echo off` at the top of the file
+`@` will supress echoing.
+
+
 ### Naming Menus
 
 You can also assign a different display name to a menu, like this:

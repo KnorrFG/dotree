@@ -1,3 +1,6 @@
-[?25l[?25hecho foo
-foo
-[?25l[?25hfoo
+[?25l[?25hecho show me
+show me
+[?25l[?25hdon't show me
+[?25l[?25hecho show me
+show me
+[?25l[?25hdon't show me

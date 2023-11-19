@@ -1,5 +1,6 @@
 echo off
 
 menu root {
-	f: "echo foo"
+	n: "echo don\'t show me"
+	y: "echo 'show me' without echoing the command" - @"echo show me"
 }

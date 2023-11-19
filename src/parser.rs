@@ -34,6 +34,7 @@ pub struct Command {
     pub name: Option<String>,
     pub shell: Option<ShellDef>,
     pub env_vars: Vec<VarDef>,
+    pub toggle_echo_setting: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -225,13 +226,14 @@ fn parse_menu(name: &str, menus: &HashMap<&str, RawMenu<'_>>) -> Result<Menu> {
                 )
             }
             Rule::quick_command => {
-                let (display_name, exec_str) = parse_quick_command(child_pair);
+                let (display_name, toggle_echo_setting, exec_str) = parse_quick_command(child_pair);
                 Node::Command(Command {
                     exec_str,
                     name: display_name,
                     settings: vec![],
                     env_vars: vec![],
                     shell: None,
+                    toggle_echo_setting,
                 })
             }
             Rule::anon_command => Node::Command(parse_anon_command(child_pair)),
@@ -283,13 +285,14 @@ impl CmdBodyParser {
                 None
             }
             Rule::quick_command => {
-                let (display_name, exec_str) = parse_quick_command(p);
+                let (display_name, toggle_echo_setting, exec_str) = parse_quick_command(p);
                 Some(Command {
                     exec_str,
                     settings: self.settings.take().unwrap_or_default(),
                     name: display_name,
                     env_vars: self.vars.take().unwrap_or_default(),
                     shell: self.shell_def.take(),
+                    toggle_echo_setting,
                 })
             }
             _ => panic!("unexpected rule: {p:#?}"),
@@ -330,17 +333,21 @@ fn parse_vars_def(p: Pair<'_, Rule>) -> Vec<VarDef> {
     p.into_inner().map(parse_var_def).collect()
 }
 
-fn parse_quick_command(pair: Pair<'_, Rule>) -> (Option<String>, StringExpr) {
+fn parse_quick_command(pair: Pair<'_, Rule>) -> (Option<String>, bool, StringExpr) {
     assert!(pair.as_rule() == Rule::quick_command);
-    let elems: Vec<_> = pair.into_inner().collect();
-    match elems.len() {
-        1 => (None, parse_string_expr(elems[0].clone())),
-        2 => (
-            Some(from_string(elems[0].clone())),
-            parse_string_expr(elems[1].clone()),
-        ),
-        _ => panic!("unexpected amount of string"),
+    let mut name = None;
+    let mut toggle_echo = false;
+    let mut str_expr = None;
+
+    for elem in pair.into_inner() {
+        match elem.as_rule() {
+            Rule::command_name => name = Some(from_string(elem.inext())),
+            Rule::ECHO_TOGGLE_TOKEN => toggle_echo = true,
+            Rule::string_expr => str_expr = Some(parse_string_expr(elem)),
+            _ => panic!("unexpected pair: {elem:#?}"),
+        }
     }
+    (name, toggle_echo, str_expr.unwrap())
 }
 
 fn parse_string_expr(p: Pair<'_, Rule>) -> StringExpr {
@@ -472,7 +479,7 @@ mod tests {
 
         menu custom_commands {
             h: "print hi" - !"echo hi"!
-            c: "echo ciao"
+            c: @"echo ciao"
         }
     "#;
 
@@ -567,6 +574,7 @@ Config {
                                 name: None,
                                 shell: None,
                                 env_vars: [],
+                                toggle_echo_setting: true,
                             },
                         ),
                         [
@@ -586,6 +594,7 @@ Config {
                                 ),
                                 shell: None,
                                 env_vars: [],
+                                toggle_echo_setting: false,
                             },
                         ),
                     },
@@ -606,6 +615,7 @@ Config {
                     name: None,
                     shell: None,
                     env_vars: [],
+                    toggle_echo_setting: false,
                 },
             ),
         },
@@ -679,6 +689,7 @@ Ok(
                         name: None,
                         shell: None,
                         env_vars: [],
+                        toggle_echo_setting: false,
                     },
                 ),
             },
@@ -730,6 +741,7 @@ Config {
                             value: None,
                         },
                     ],
+                    toggle_echo_setting: false,
                 },
             ),
         },
@@ -780,6 +792,7 @@ Config {
                                 name: None,
                                 shell: None,
                                 env_vars: [],
+                                toggle_echo_setting: false,
                             },
                         ),
                     },
@@ -826,6 +839,7 @@ Config {
                     name: None,
                     shell: None,
                     env_vars: [],
+                    toggle_echo_setting: false,
                 },
             ),
         },
@@ -870,6 +884,7 @@ Config {
                     name: None,
                     shell: None,
                     env_vars: [],
+                    toggle_echo_setting: false,
                 },
             ),
         },

@@ -1,5 +1,6 @@
 echo on
 
 menu root {
-	f: "echo foo"
+	y: "echo show me"
+	n: @"echo don\'t show me"
 }

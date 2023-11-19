@@ -161,7 +161,7 @@ fn run_command(
             cmd.settings.contains(&CommandSetting::IgnoreResult),
         )
     } else {
-        if rt_conf::settings().echo_by_default {
+        if rt_conf::settings().echo_by_default != cmd.toggle_echo_setting {
             eprintln!("{arg}");
         }
         exec_cmd(&shell.name, args)
