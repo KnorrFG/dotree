@@ -1,10 +1,19 @@
 WHITESPACE = _{ "\t" | " " }
 COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE}
 
-file = { SOI ~ NEWLINE* ~ shell_def? ~ NEWLINE* ~ ((menu|snippet) ~ NEWLINE*)+ ~ EOI }
+file = { SOI ~ NEWLINE* ~ setting* ~ NEWLINE* ~ ((menu|snippet) ~ NEWLINE*)+ ~ EOI }
 menu = { "menu" ~ string? ~ symbol ~ NEWLINE* ~ OPENBR ~ menu_body ~ CLOSINGBR }
 OPENBR = _{"{"}
 CLOSINGBR = _{"}"}
+
+setting = { shell_def | echo_setting}
+
+shell_def = {"shell" ~ (string|word)+ }
+word = @{ (!("\"" | WHITESPACE | NEWLINE) ~ ANY)+ }
+
+echo_setting = {"echo" ~ echo_val}
+echo_val = {"on" | "off"}
+
 
 menu_body = { (NEWLINE* ~ entry ~ NEWLINE*)+ }
 entry = { keydef ~ ":" ~ (anon_command | quick_command | symbol)}
@@ -38,9 +47,6 @@ DEF_SEP = _{"," ~ NEWLINE*}
 var_def = { symbol ~ default_var? }
 default_var = { "=" ~ string }
 cmd_settings = { "set" ~ symbol ~ (DEF_SEP* ~ symbol)* }
-
-shell_def = {"shell" ~ (string|word)+ }
-word = @{ (!("\"" | WHITESPACE | NEWLINE) ~ ANY)+ }
 
 snippet = { "snippet" ~ NEWLINE* ~ symbol ~ "=" ~ string_expr}
 string_expr = { string_expr_elem ~ (NEWLINE* ~ "+" ~ NEWLINE* ~ string_expr_elem)*}

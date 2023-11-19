@@ -11,7 +11,7 @@ use std::process::Stdio;
 use std::{fs, io};
 
 use crate::outproxy::OutProxy;
-use crate::parser::{self, CommandSetting, Menu, Node, SnippetTable};
+use crate::parser::{self, CommandSetting, Menu, Node, ShellDef, SnippetTable};
 use crate::rt_conf;
 
 #[derive(Debug, Clone)]
@@ -143,7 +143,11 @@ fn run_command(
         .context("Clearing input lines")?;
     store_hist(history).context("Storing history")?;
 
-    let shell = cmd.shell.as_ref().unwrap_or_else(|| rt_conf::shell_def());
+    let shell = cmd
+        .shell
+        .clone()
+        .or_else(|| rt_conf::settings().shell_def.clone())
+        .unwrap_or_default();
     debug!("shell: {shell:?}");
     let arg = cmd
         .exec_str
@@ -157,6 +161,9 @@ fn run_command(
             cmd.settings.contains(&CommandSetting::IgnoreResult),
         )
     } else {
+        if rt_conf::settings().echo_by_default {
+            eprintln!("{arg}");
+        }
         exec_cmd(&shell.name, args)
     }
 }

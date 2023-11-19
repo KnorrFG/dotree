@@ -1,4 +1,5 @@
 use hashbrown::HashMap;
+use log::debug;
 use std::collections::VecDeque;
 
 use pest::{
@@ -65,10 +66,16 @@ pub enum StringExprElem {
     String(String),
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct Settings {
+    pub shell_def: Option<ShellDef>,
+    pub echo_by_default: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub menu: Menu,
-    pub shell_def: Option<ShellDef>,
+    pub settings: Settings,
     pub snippet_table: SnippetTable,
 }
 
@@ -101,15 +108,8 @@ pub fn parse(src: &str) -> Result<Config> {
     let mut pairs = ConfigParser::parse(Rule::file, src).context("Parsing source")?;
     let file = pairs.next().unwrap();
     assert!(file.as_rule() == Rule::file);
-    let mut entries = file.into_inner();
-    let mut shell_def = None;
 
-    if let Some(first_entry) = entries.peek() {
-        if first_entry.as_rule() == Rule::shell_def {
-            shell_def = Some(parse_shell_def(first_entry));
-            _ = entries.next();
-        }
-    }
+    let (settings, entries) = parse_settings(file.into_inner());
 
     let menus = get_menu_table(entries.clone());
     let snippet_table = get_snippet_table(entries);
@@ -117,9 +117,35 @@ pub fn parse(src: &str) -> Result<Config> {
 
     Ok(Config {
         menu,
-        shell_def,
+        settings,
         snippet_table,
     })
+}
+
+fn parse_settings<'a>(mut entries: Pairs<'a, Rule>) -> (Settings, Pairs<'a, Rule>) {
+    let mut res = Settings::default();
+    debug!("Parsing settings: \n{entries:?}");
+    while let Some(first_entry) = entries.peek() {
+        if first_entry.as_rule() != Rule::setting {
+            break;
+        }
+        let first_entry = first_entry.inext();
+        match first_entry.as_rule() {
+            Rule::shell_def => {
+                res.shell_def = Some(parse_shell_def(first_entry));
+                debug!("parsing shell_def result: {:?}", res.shell_def);
+            }
+            Rule::echo_setting => {
+                res.echo_by_default = parse_echo_setting(first_entry);
+                debug!("parsing echo_setting result: {:?}", res.echo_by_default);
+            }
+            _ => {
+                panic!("unexpected rule:\n{first_entry:#?}");
+            }
+        }
+        _ = entries.next();
+    }
+    (res, entries)
 }
 
 fn get_snippet_table(entries: Pairs<'_, Rule>) -> HashMap<String, StringExpr> {
@@ -331,6 +357,11 @@ fn parse_string_expr(p: Pair<'_, Rule>) -> StringExpr {
         }
     }
     StringExpr(res)
+}
+
+fn parse_echo_setting(p: Pair<'_, Rule>) -> bool {
+    assert!(p.as_rule() == Rule::echo_setting);
+    p.inext().as_str() == "on"
 }
 
 impl std::fmt::Display for Node {
@@ -579,7 +610,10 @@ Config {
             ),
         },
     },
-    shell_def: None,
+    settings: Settings {
+        shell_def: None,
+        echo_by_default: false,
+    },
     snippet_table: {},
 }
 "#
@@ -649,7 +683,10 @@ Ok(
                 ),
             },
         },
-        shell_def: None,
+        settings: Settings {
+            shell_def: None,
+            echo_by_default: false,
+        },
         snippet_table: {},
     },
 )
@@ -697,7 +734,10 @@ Config {
             ),
         },
     },
-    shell_def: None,
+    settings: Settings {
+        shell_def: None,
+        echo_by_default: false,
+    },
     snippet_table: {},
 }
 "#
@@ -747,7 +787,10 @@ Config {
             ),
         },
     },
-    shell_def: None,
+    settings: Settings {
+        shell_def: None,
+        echo_by_default: false,
+    },
     snippet_table: {},
 }
 "#
@@ -787,7 +830,10 @@ Config {
             ),
         },
     },
-    shell_def: None,
+    settings: Settings {
+        shell_def: None,
+        echo_by_default: false,
+    },
     snippet_table: {},
 }
 "#
@@ -828,7 +874,10 @@ Config {
             ),
         },
     },
-    shell_def: None,
+    settings: Settings {
+        shell_def: None,
+        echo_by_default: false,
+    },
     snippet_table: {},
 }
 "#
@@ -881,6 +930,31 @@ StringExpr(
     ],
 )
 "#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_echo_rule() -> Result<()> {
+        k9::snapshot!(
+            parse_echo_setting(
+                ConfigParser::parse(Rule::echo_setting, r#"echo on"#)?
+                    .next()
+                    .unwrap()
+            ),
+            "true"
+        );
+        k9::snapshot!(
+            parse_echo_setting(
+                ConfigParser::parse(Rule::echo_setting, r#"echo off"#)?
+                    .next()
+                    .unwrap()
+            ),
+            "false"
+        );
+        k9::snapshot!(
+            ConfigParser::parse(Rule::echo_setting, r#"echo foo"#).is_err(),
+            "true"
         );
         Ok(())
     }

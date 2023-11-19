@@ -8,6 +8,7 @@ use dotree::{
     parser::{self, Config, Node, ShellDef},
     rt_conf,
 };
+use log::debug;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -43,15 +44,14 @@ fn main() -> Result<()> {
     let conf_src = fs::read_to_string(conf_path).context("loading config")?;
     let Config {
         menu,
-        shell_def: file_shell_def,
+        mut settings,
         snippet_table,
     } = parser::parse(&conf_src).context("Parsing Config")?;
 
-    let env_shell = get_shell_from_env()
-        .context("Getting Shell from Env")?
-        .unwrap_or_default();
-    let shell = file_shell_def.unwrap_or(env_shell);
-    rt_conf::init(local_conf_dir, shell);
+    let env_shell = get_shell_from_env().context("Getting Shell from Env")?;
+    settings.shell_def = settings.shell_def.or(env_shell);
+    debug!("settings:\n{settings:#?}");
+    rt_conf::init(local_conf_dir, settings);
 
     let term = Term::stdout();
     term.hide_cursor()?;
