@@ -67,7 +67,7 @@ pub enum StringExprElem {
     String(String),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Settings {
     pub shell_def: Option<ShellDef>,
     pub echo_by_default: bool,
@@ -101,6 +101,15 @@ impl INext for Pair<'_, Rule> {
     }
 }
 
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            shell_def: None,
+            echo_by_default: true,
+        }
+    }
+}
+
 fn from_string(p: Pair<'_, Rule>) -> String {
     p.nnext(2).as_str().to_string()
 }
@@ -123,7 +132,7 @@ pub fn parse(src: &str) -> Result<Config> {
     })
 }
 
-fn parse_settings<'a>(mut entries: Pairs<'a, Rule>) -> (Settings, Pairs<'a, Rule>) {
+fn parse_settings(mut entries: Pairs<Rule>) -> (Settings, Pairs<Rule>) {
     let mut res = Settings::default();
     debug!("Parsing settings: \n{entries:?}");
     while let Some(first_entry) = entries.peek() {
@@ -622,7 +631,7 @@ Config {
     },
     settings: Settings {
         shell_def: None,
-        echo_by_default: false,
+        echo_by_default: true,
     },
     snippet_table: {},
 }
@@ -696,7 +705,7 @@ Ok(
         },
         settings: Settings {
             shell_def: None,
-            echo_by_default: false,
+            echo_by_default: true,
         },
         snippet_table: {},
     },
@@ -748,7 +757,7 @@ Config {
     },
     settings: Settings {
         shell_def: None,
-        echo_by_default: false,
+        echo_by_default: true,
     },
     snippet_table: {},
 }
@@ -802,7 +811,7 @@ Config {
     },
     settings: Settings {
         shell_def: None,
-        echo_by_default: false,
+        echo_by_default: true,
     },
     snippet_table: {},
 }
@@ -846,7 +855,7 @@ Config {
     },
     settings: Settings {
         shell_def: None,
-        echo_by_default: false,
+        echo_by_default: true,
     },
     snippet_table: {},
 }
@@ -891,7 +900,7 @@ Config {
     },
     settings: Settings {
         shell_def: None,
-        echo_by_default: false,
+        echo_by_default: true,
     },
     snippet_table: {},
 }

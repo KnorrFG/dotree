@@ -1,5 +1,3 @@
-echo on
-
 menu root {
 	y: "echo show me"
 	n: @"echo don\'t show me"

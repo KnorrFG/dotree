@@ -1,3 +1,5 @@
+echo off
+
 snippet vars = !"
 FOO="foo"	
 "!

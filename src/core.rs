@@ -11,7 +11,7 @@ use std::process::Stdio;
 use std::{fs, io};
 
 use crate::outproxy::OutProxy;
-use crate::parser::{self, CommandSetting, Menu, Node, ShellDef, SnippetTable};
+use crate::parser::{self, CommandSetting, Menu, Node, SnippetTable};
 use crate::rt_conf;
 
 #[derive(Debug, Clone)]

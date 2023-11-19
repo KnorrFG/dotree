@@ -1,4 +1,8 @@
-[?25l[?25halpha beta gamma
-[?25l[?25h[1A[2K[1B[1Aalpha beta lala
-[?25l[?25h[1A[2K[1B[1Aalpha beta foo
-[?25l[?25h[3A[2K[1B[2K[1B[2K[1B[3Afoo
+[?25l[?25hecho $a $b $c
+alpha beta gamma
+[?25l[?25h[1A[2K[1B[1Aecho $a $b $c
+alpha beta lala
+[?25l[?25h[1A[2K[1B[1Aecho $a $b $c
+alpha beta foo
+[?25l[?25h[3A[2K[1B[2K[1B[2K[1B[3Aecho $a $b $c
+foo
