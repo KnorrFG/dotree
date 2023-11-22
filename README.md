@@ -237,3 +237,9 @@ menu root {
 
 Download the appropriate binary for your platform (windows is untested) from the release page, 
 or install via cargo: `cargo install --git https://github.com/knorrfg/dotree`.
+
+### Arch Linux
+
+- [dotree](https://aur.archlinux.org/packages/dotree)
+- [dotree-bin](https://aur.archlinux.org/packages/dotree-bin)
+- [dotree-git](https://aur.archlinux.org/packages/dotree-git)
