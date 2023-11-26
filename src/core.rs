@@ -228,8 +228,10 @@ fn store_hist(hist: Vec<String>) -> Result<()> {
     let line_ending = "\r\n";
     #[cfg(not(windows))]
     let line_ending = "\n";
-
-    fs::write(get_hist_path()?, hist.join(line_ending))?;
+    let hist_path = get_hist_path()?;
+    fs::create_dir_all(hist_path.parent().context("Getting history file dir")?)
+        .context("creating history file dir")?;
+    fs::write(hist_path, hist.join(line_ending))?;
     Ok(())
 }
 
