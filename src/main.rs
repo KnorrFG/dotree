@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use console::Term;
 use dotree::{
-    core::Runner,
+    core::{load_command, store_command, Runner},
     defer,
     parser::{self, Config, ShellDef},
     rt_conf,
@@ -52,7 +52,7 @@ fn main() -> Result<()> {
     let env_shell = get_shell_from_env().context("Getting Shell from Env")?;
     settings.shell_def = settings.shell_def.or(env_shell);
     debug!("settings:\n{settings:#?}");
-    rt_conf::init(local_conf_dir, settings);
+    rt_conf::init(local_conf_dir.clone(), settings);
 
     let term = Term::stdout();
     term.hide_cursor()?;
@@ -62,9 +62,19 @@ fn main() -> Result<()> {
         }
     }
 
+    if args.previous {
+        if let Some(cmd) = load_command(local_conf_dir.as_deref())? {
+            cmd.run()?;
+            return Ok(());
+        } else {
+            eprintln!("No previously stored command found");
+            exit(1);
+        }
+    }
     let (mut runner, mb_cmd) = Runner::new(&menu, &args.input, &snippet_table)?;
 
     if let Some(cmd) = mb_cmd {
+        store_command(&cmd, local_conf_dir.as_deref())?;
         cmd.run()?;
         if !cmd.repeats() {
             return Ok(());
@@ -76,6 +86,7 @@ fn main() -> Result<()> {
             None => break Ok(()),
             Some(cmd) => {
                 runner.clear_output()?;
+                store_command(&cmd, local_conf_dir.as_deref())?;
                 cmd.run()?;
                 if !cmd.repeats() {
                     break Ok(());

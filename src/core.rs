@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 use console::{pad_str, style, Alignment, Key, Term};
 use log::debug;
 
-use miniserde::{Deserialize, Serialize};
+use miniserde::{json, Deserialize, Serialize};
 use rustyline::{
     completion::FilenameCompleter, highlight::Highlighter, Completer, Helper, Hinter, Validator,
 };
@@ -10,7 +10,7 @@ use rustyline::{
 use std::{
     env, fs,
     io::{self, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Stdio,
 };
 
@@ -282,6 +282,19 @@ fn get_hist_path() -> Result<PathBuf> {
     Ok(dir.join("dthist"))
 }
 
+fn get_last_command_cache_path(local_conf_dir: Option<&Path>) -> Result<PathBuf> {
+    if let Some(local_dir) = local_conf_dir {
+        Ok(local_dir.join(".dtcache"))
+    } else {
+        let dir = if let Some(sd) = dirs::state_dir() {
+            sd
+        } else {
+            dirs::data_local_dir().ok_or(anyhow!("couldn't get local dir"))?
+        };
+        Ok(dir.join("dtcache"))
+    }
+}
+
 fn load_hist() -> Result<Vec<String>> {
     let hist_path = get_hist_path()?;
     Ok(if hist_path.exists() {
@@ -293,6 +306,22 @@ fn load_hist() -> Result<Vec<String>> {
     } else {
         vec![]
     })
+}
+
+pub fn store_command(cmd: &ConfiguredCommand, local_conf_dir: Option<&Path>) -> Result<()> {
+    let last_command_cache_path = get_last_command_cache_path(local_conf_dir)?;
+    fs::write(last_command_cache_path, json::to_string(cmd))?;
+    Ok(())
+}
+
+pub fn load_command(local_conf_dir: Option<&Path>) -> Result<Option<ConfiguredCommand>> {
+    let last_command_cache_path = get_last_command_cache_path(local_conf_dir)?;
+    if last_command_cache_path.exists() {
+        let src = fs::read_to_string(last_command_cache_path)?;
+        Ok(json::from_str(&src)?)
+    } else {
+        Ok(None)
+    }
 }
 
 fn store_hist(hist: Vec<String>) -> Result<()> {
