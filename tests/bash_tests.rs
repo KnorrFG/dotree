@@ -1,6 +1,8 @@
 use std::{env, fs, path::PathBuf};
 
 use anyhow::{ensure, Result};
+use indoc::formatdoc;
+use regex::Regex;
 use subprocess::{Exec, Redirection};
 
 #[test]
@@ -24,11 +26,37 @@ fn bash_tests() -> Result<()> {
         let out_file_name = bash_file.with_extension("out");
         if out_file_name.exists() {
             let contents = fs::read_to_string(out_file_name)?;
+            let contents_no_cs = remove_control_sequences(&contents);
+            let output_no_cs = remove_control_sequences(&output);
             ensure!(
                 contents == output,
-                "test {} failed. Outputs differ. New output: \n\n{}",
-                bash_file.to_string_lossy(),
-                output
+                formatdoc!(
+                    "test {} failed. Outputs differ.
+                     Old output:
+                     -------------------------------------------------------
+                     {contents:?}
+                     -------------------------------------------------------
+
+                     New output:
+                     -------------------------------------------------------
+                     {output:?}
+                     -------------------------------------------------------
+
+                     ============================================================
+                     Without control sequences:
+
+                     Old output:
+                     -------------------------------------------------------
+                     {contents_no_cs}
+                     -------------------------------------------------------
+
+                     New output:
+                     -------------------------------------------------------
+                     {output_no_cs}
+                     -------------------------------------------------------
+                     ",
+                    bash_file.to_string_lossy(),
+                )
             );
         } else {
             fs::write(out_file_name, output)?;
@@ -46,4 +74,9 @@ fn get_bash_files() -> Result<Vec<PathBuf>> {
         }
     }
     Ok(res)
+}
+
+fn remove_control_sequences(input: &str) -> String {
+    let re = Regex::new(r"\x1B\[[0-9;?]*[A-Za-z]").unwrap();
+    re.replace_all(input, "").to_string()
 }

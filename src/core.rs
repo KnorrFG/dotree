@@ -253,15 +253,9 @@ impl ConfiguredCommand {
     }
 
     pub fn run(&self) -> Result<()> {
-        if self.cmd_repeats && self.cmd_toggle_echo_setting != rt_conf::settings().echo_by_default {
-            eprintln!(
-                "{}",
-                self.args
-                    .iter()
-                    .map(|x| format!("\"{x}\""))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            );
+        if !self.cmd_repeats && self.cmd_toggle_echo_setting != rt_conf::settings().echo_by_default
+        {
+            eprintln!("{}", self.args.iter().last().unwrap());
         }
 
         let mut cmd = std::process::Command::new(&self.shell_name);
