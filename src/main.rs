@@ -4,8 +4,9 @@ use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use console::Term;
 use dotree::{
-    core::run,
-    parser::{self, Config, Node, ShellDef},
+    core::Runner,
+    defer,
+    parser::{self, Config, ShellDef},
     rt_conf,
 };
 use log::debug;
@@ -55,11 +56,33 @@ fn main() -> Result<()> {
 
     let term = Term::stdout();
     term.hide_cursor()?;
-    let res = run(&Node::Menu(menu), &args.input, &snippet_table);
-    if let Err(e) = term.show_cursor() {
-        eprintln!("Warning, couldn't show cursor again:\n{e:?}");
+    defer! {
+        if let Err(e) = term.show_cursor() {
+            eprintln!("Warning: couldn't show cursor again:\n{e:?}");
+        }
     }
-    res
+
+    let (mut runner, mb_cmd) = Runner::new(&menu, &args.input, &snippet_table)?;
+
+    if let Some(cmd) = mb_cmd {
+        cmd.run()?;
+        if !cmd.repeats() {
+            return Ok(());
+        }
+    }
+
+    loop {
+        match runner.run()? {
+            None => break Ok(()),
+            Some(cmd) => {
+                runner.clear_output()?;
+                cmd.run()?;
+                if !cmd.repeats() {
+                    break Ok(());
+                }
+            }
+        }
+    }
 }
 
 fn get_default_config_dir() -> Option<PathBuf> {
@@ -108,4 +131,8 @@ struct Args {
     /// All commands are executed from the files directory
     #[arg(long, short)]
     local_mode: bool,
+
+    /// instead of processing any input, just repeat the last executed command
+    #[arg(long, short)]
+    previous: bool,
 }

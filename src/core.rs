@@ -1,83 +1,151 @@
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use console::{pad_str, style, Alignment, Key, Term};
 use log::debug;
-use rustyline::completion::FilenameCompleter;
-use rustyline::highlight::Highlighter;
-use rustyline::{Completer, Helper, Hinter, Validator};
-use std::env;
-use std::io::Write;
-use std::path::PathBuf;
-use std::process::Stdio;
-use std::{fs, io};
 
-use crate::outproxy::OutProxy;
-use crate::parser::{self, CommandSetting, Menu, Node, SnippetTable};
-use crate::rt_conf;
+use miniserde::{Deserialize, Serialize};
+use rustyline::{
+    completion::FilenameCompleter, highlight::Highlighter, Completer, Helper, Hinter, Validator,
+};
 
-#[derive(Debug, Clone)]
-enum Submenus<'a> {
+use std::{
+    env, fs,
+    io::{self, Write},
+    path::PathBuf,
+    process::Stdio,
+};
+
+use crate::{
+    outproxy::OutProxy,
+    parser::{self, CommandSetting, Menu, Node, SnippetTable},
+    rt_conf,
+};
+
+#[derive(Debug, Clone, Copy)]
+enum MenuMatch<'a> {
     Exact(&'a Node, usize),
-    Incomplete(usize),
+    Incomplete(&'a Menu, usize),
     None,
 }
 
-pub fn run(root_node: &Node, input: &[String], snippet_table: &SnippetTable) -> Result<()> {
-    let mut input_chars = if let Some(input) = input.first() {
-        input.chars().collect()
-    } else {
-        vec![]
-    };
-    let arg_vals = if input.len() > 1 { &input[1..] } else { &[] };
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfiguredCommand {
+    shell_name: String,
+    cmd_repeats: bool,
+    cmd_ignores_result: bool,
+    cmd_toggle_echo_setting: bool,
+    args: Vec<String>,
+}
 
-    let term = Term::stdout();
-    let mut out_proxy = OutProxy::new();
-    let (found_node, input_offset) = follow_path(root_node, &input_chars, 0);
-    let mut input_pos = input_offset;
-    let mut current_node = if let Some(found_node) = found_node {
-        found_node
-    } else {
-        input_chars.clear();
-        root_node
-    };
+pub struct Runner<'a> {
+    input_chars: Vec<char>,
+    out_proxy: OutProxy,
+    input_pos: usize,
+    current_menu: &'a Menu,
+    root_menu: &'a Menu,
+    snippet_table: &'a SnippetTable,
+    arg_vals: &'a [String],
+    term: Term,
+}
 
-    // we need to create a handler, because, if we don't the program will terminate abnormally
-    // but if we do, readline will return an io::Error with kind Interrupted, when ctrl+c
-    // is pressed
-    ctrlc::set_handler(|| {})?;
+impl<'a> Runner<'a> {
+    pub fn new(
+        root_menu: &'a Menu,
+        input: &'a [String],
+        snippet_table: &'a SnippetTable,
+    ) -> Result<(Self, Option<ConfiguredCommand>)> {
+        let input_chars = if let Some(input) = input.first() {
+            input.chars().collect()
+        } else {
+            vec![]
+        };
+        let arg_vals = if input.len() > 1 { &input[1..] } else { &[] };
 
-    loop {
-        match current_node {
-            Node::Command(c) => {
-                if c.repeat() {
-                    input_chars.pop();
-                } else {
-                    term.clear_last_lines(out_proxy.n_lines)?;
-                    term.show_cursor()?;
-                }
-                run_command(c, &term, arg_vals, snippet_table)?;
-            }
-            Node::Menu(m) => {
-                term.clear_last_lines(out_proxy.n_lines)?;
-                out_proxy.n_lines = 0;
-                render_menu(m, &input_chars[input_pos..], &mut out_proxy)?;
+        let out_proxy = OutProxy::new();
+        let mut this = Self {
+            input_chars,
+            out_proxy,
+            input_pos: 0,
+            current_menu: root_menu,
+            root_menu,
+            snippet_table,
+            arg_vals,
+            term: Term::stdout(),
+        };
+        let command = this.resolve_input()?;
+        ctrlc::set_handler(|| {})?;
+
+        Ok((this, command))
+    }
+
+    /// renders, takes an input and then resolves the input.
+    /// if it resolves to a command it's configured and returned,
+    /// otherwise this just loops, unless ctrl + c is pressed
+    pub fn run(&mut self) -> Result<Option<ConfiguredCommand>> {
+        loop {
+            self.clear_output()?;
+            render_menu(
+                self.current_menu,
+                &self.input_chars[self.input_pos..],
+                &mut self.out_proxy,
+            )?;
+
+            // returns true when the user pressed Esc or Ctrl+c, which means we should exit
+            if get_input(&mut self.input_chars, &self.term)? {
+                break Ok(None);
+            };
+
+            let mb_cmd = self.resolve_input()?;
+            if mb_cmd.is_some() {
+                break Ok(mb_cmd);
             }
         }
+    }
 
-        // returns true when the user pressed Esc or Ctrl+c, which means we should exit
-        if get_input(&mut input_chars, &term)? {
-            term.clear_last_lines(out_proxy.n_lines)?;
-            Term::stderr().show_cursor()?;
-            break Ok(());
-        };
+    pub fn clear_output(&mut self) -> Result<(), anyhow::Error> {
+        self.term.clear_last_lines(self.out_proxy.n_lines)?;
+        self.out_proxy.n_lines = 0;
+        Ok(())
+    }
 
-        let (found_node, input_offset_) = follow_path(root_node, &input_chars, 0);
-        input_pos = input_offset_;
-        current_node = if let Some(found_node) = found_node {
-            found_node
-        } else {
-            input_chars.clear();
-            root_node
-        };
+    /// sets the input_pos and the current_menu according to the input.
+    /// returns a configured command if the input resolves to one
+    pub fn resolve_input(&mut self) -> Result<Option<ConfiguredCommand>> {
+        debug!("Follow path");
+        match follow_path(self.root_menu, &self.input_chars, 0) {
+            MenuMatch::Exact(node, offset) => {
+                self.input_pos = offset;
+                match node {
+                    Node::Menu(menu) => {
+                        debug!("Updating menu to: {menu}");
+                        self.current_menu = menu;
+                    }
+                    Node::Command(command) => {
+                        debug!("found command: {command:?}");
+                        if command.repeat() {
+                            self.input_chars.pop();
+                            self.input_pos -= 1;
+                        }
+                        return Ok(Some(configure_command(
+                            command,
+                            &self.term,
+                            self.arg_vals,
+                            self.snippet_table,
+                        )?));
+                    }
+                }
+            }
+            MenuMatch::Incomplete(menu, offset) => {
+                debug!("Incomplete match, pos = {offset}");
+                self.current_menu = menu;
+                self.input_pos = offset;
+            }
+            MenuMatch::None => {
+                debug!("missmatch");
+                self.input_chars.clear();
+                self.current_menu = self.root_menu;
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -109,12 +177,12 @@ fn get_input(input_chars: &mut Vec<char>, term: &Term) -> Result<Exit> {
     Ok(false)
 }
 
-fn run_command(
+fn configure_command(
     cmd: &parser::Command,
     term: &Term,
     arg_vals: &[String],
     snippet_table: &SnippetTable,
-) -> Result<()> {
+) -> Result<ConfiguredCommand> {
     let mut history = load_hist().context("loading hist")?;
     debug!("Running: {cmd}");
 
@@ -154,50 +222,60 @@ fn run_command(
         .resolve(snippet_table)
         .context(format!("resolving {}", cmd.exec_str))?;
     let args = shell.args_with(arg.as_str());
-    if cmd.settings.contains(&CommandSetting::Repeat) {
-        run_subcommand(
-            &shell.name,
-            &args,
-            cmd.settings.contains(&CommandSetting::IgnoreResult),
-        )
-    } else {
-        if rt_conf::settings().echo_by_default != cmd.toggle_echo_setting {
-            eprintln!("{arg}");
+    // todo: Ich wuerde sagen an dieser stelle werden shell und args, und vermutlich cmd
+    // weggespeichert, sodass man sie dann wieder laden kann
+    // man muesste außerdem die elemtente von cmd speichern, die gebraucht werden.
+    // die folge waere, dass aenderungen am config file dann komplett ignoriert werden.
+    // die einfache loesung waere den cache zu loeschen, wenn das config file geupdated
+    // wurde. Bzw den cache zu invalidieren wenn das edit date der config neuer ist
+    // als das des caches.
+    // Wenn ich unterschiedliche caches fuer local und global mode will, sollte
+    // ich das speichern vermutlich nicht hier tun, und nur die zu speichernde struktur
+    // zurueck schicken. In dem fall, kann ich kein exec mehr verwenden.
+    // alternativ koennte ich auch die info wo gespeichert werden soll bis hier
+    // durchschleifen, aber das scheint mir auch nicht sinnvoll
+    // vermutlich sollte man alles was in dieser funktion passiert bis hier
+    // in eine eigene funktion verlagern deren result kann man dann
+    // wegspeichern, und dann hier rein schmeißen
+    let conf = ConfiguredCommand {
+        shell_name: shell.name.to_string(),
+        cmd_repeats: cmd.settings.contains(&CommandSetting::Repeat),
+        cmd_ignores_result: cmd.settings.contains(&CommandSetting::IgnoreResult),
+        cmd_toggle_echo_setting: cmd.toggle_echo_setting,
+        args: args.iter().map(|x| x.to_string()).collect(),
+    };
+    Ok(conf)
+}
+
+impl ConfiguredCommand {
+    pub fn repeats(&self) -> bool {
+        self.cmd_repeats
+    }
+
+    pub fn run(&self) -> Result<()> {
+        if self.cmd_repeats && self.cmd_toggle_echo_setting != rt_conf::settings().echo_by_default {
+            eprintln!(
+                "{}",
+                self.args
+                    .iter()
+                    .map(|x| format!("\"{x}\""))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
         }
-        exec_cmd(&shell.name, args)
-    }
-}
 
-#[cfg(not(windows))]
-fn exec_cmd<'a>(shell_name: &'a str, mut args: Vec<&'a str>) -> Result<()> {
-    args.insert(0, shell_name);
-    Err(anyhow!(
-        "error executing command: \n{:?}",
-        exec::execvp(shell_name, &args)
-    ))
-}
+        let mut cmd = std::process::Command::new(&self.shell_name);
+        cmd.args(&self.args);
+        if self.cmd_repeats {
+            cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        }
 
-#[cfg(windows)]
-fn exec_cmd(shell_name: &str, args: Vec<&str>) -> Result<()> {
-    // windows doesn't have an exec, let's do this instead
-    let status = std::process::Command::new(shell_name).args(args).status()?;
-    if !status.success() {
-        Err(anyhow!("Process didn't exit successfully: {status:?}"))
-    } else {
-        std::process::exit(0);
-    }
-}
-
-fn run_subcommand(prog: &str, args: &[&str], ignore_result: bool) -> Result<()> {
-    let status = std::process::Command::new(prog)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .args(args)
-        .status()?;
-    if !ignore_result && !status.success() {
-        Err(anyhow!("Process didn't exit successfully: {status:?}"))
-    } else {
-        Ok(())
+        let status = cmd.status()?;
+        if !self.cmd_ignores_result && !status.success() {
+            Err(anyhow!("Process didn't exit successfully: {status:?}"))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -278,6 +356,7 @@ fn render_menu(
     remaining_path: &[char],
     out_proxy: &mut OutProxy,
 ) -> Result<()> {
+    debug!("Rendering menu: {current_menu}");
     let remaining_path = String::from_iter(remaining_path);
     let keysection_len = current_menu
         .entries
@@ -303,24 +382,21 @@ fn render_menu(
     Ok(())
 }
 
-fn follow_path<'a>(node: &'a Node, input_chars: &[char], pos: usize) -> (Option<&'a Node>, usize) {
-    match node {
-        Node::Menu(this) => match find_submenus_for(this, input_chars, pos) {
-            Submenus::Exact(next_node, new_pos) => follow_path(next_node, input_chars, new_pos),
-            Submenus::Incomplete(new_pos) => (Some(node), new_pos),
-            Submenus::None => (None, 0),
-        },
-        Node::Command(_) => (Some(node), pos),
+fn follow_path<'a>(menu: &'a Menu, input_chars: &[char], pos: usize) -> MenuMatch<'a> {
+    match find_menu_entry(menu, input_chars, pos) {
+        menu_match @ MenuMatch::Exact(Node::Menu(menu), new_pos) => {
+            debug!("Follow path exact match, input_chars: {input_chars:?}, new_pow: {new_pos}");
+            if new_pos == input_chars.len() {
+                menu_match
+            } else {
+                follow_path(menu, input_chars, new_pos)
+            }
+        }
+        res => res,
     }
 }
 
-fn find_submenus_for<'a>(menu: &'a Menu, input_chars: &[char], pos: usize) -> Submenus<'a> {
-    // The base idea here is to compare the path with valid entries character wise.
-    // A vec of options of chars is used, so it can be set to none, if it doesn't match any more
-    // If it matches, the first char is removed. If after the removal of the char, the slice is
-    // empty, we have an exact match and return it.
-    // If we don't have any options left after checking the complete path, that means the path was
-    // invalid, otherwise it's not yet complete
+fn find_menu_entry<'a>(menu: &'a Menu, input_chars: &[char], pos: usize) -> MenuMatch<'a> {
     let mut entries: Vec<_> = menu
         .entries
         .iter()
@@ -335,7 +411,7 @@ fn find_submenus_for<'a>(menu: &'a Menu, input_chars: &[char], pos: usize) -> Su
                 if chars[0] == *c {
                     *chars = &chars[1..];
                     if chars.is_empty() {
-                        return Submenus::Exact(node, pos + i + 1);
+                        return MenuMatch::Exact(node, pos + i + 1);
                     }
                 } else {
                     *chars_opt = None;
@@ -345,8 +421,8 @@ fn find_submenus_for<'a>(menu: &'a Menu, input_chars: &[char], pos: usize) -> Su
     }
 
     if entries.iter().all(|(chars, _)| chars.is_none()) {
-        Submenus::None
+        MenuMatch::None
     } else {
-        Submenus::Incomplete(pos)
+        MenuMatch::Incomplete(menu, pos)
     }
 }

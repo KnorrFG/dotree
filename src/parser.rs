@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 use log::debug;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Display};
 
 use pest::{
     iterators::{Pair, Pairs},
@@ -25,6 +25,12 @@ pub struct Menu {
     pub name: String,
     pub display_name: Option<String>,
     pub entries: HashMap<Vec<char>, Node>,
+}
+
+impl Display for Menu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display_name.as_ref().unwrap_or(&self.name))
+    }
 }
 
 #[derive(Debug, Clone)]
