@@ -83,14 +83,10 @@ impl<'a> Runner<'a> {
     pub fn run(&mut self) -> Result<Option<ConfiguredCommand>> {
         loop {
             self.clear_output()?;
-            render_menu(
-                self.current_menu,
-                &self.input_chars[self.input_pos..],
-                &mut self.out_proxy,
-            )?;
+            self.render_menu()?;
 
             // returns true when the user pressed Esc or Ctrl+c, which means we should exit
-            if get_input(&mut self.input_chars, &self.term)? {
+            if self.get_input()? {
                 break Ok(None);
             };
 
@@ -147,34 +143,61 @@ impl<'a> Runner<'a> {
         }
         Ok(None)
     }
-}
 
-type Exit = bool;
-fn get_input(input_chars: &mut Vec<char>, term: &Term) -> Result<Exit> {
-    let key = match term.read_key() {
-        Ok(k) => k,
-        Err(e) if e.kind() == io::ErrorKind::Interrupted => {
-            return Ok(true);
-        }
-        Err(e) => {
-            bail!("Error while waiting for key: {e:?}");
-        }
-    };
+    fn get_input(&mut self) -> Result<bool> {
+        let key = match self.term.read_key() {
+            Ok(k) => k,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {
+                return Ok(true);
+            }
+            Err(e) => {
+                bail!("Error while waiting for key: {e:?}");
+            }
+        };
 
-    debug!("got char: {key:?}");
-    match key {
-        Key::Char(c) => {
-            input_chars.push(c);
+        debug!("got char: {key:?}");
+        match key {
+            Key::Char(c) => {
+                self.input_chars.push(c);
+            }
+            Key::Backspace => {
+                self.input_chars.pop();
+            }
+            Key::Escape => {
+                return Ok(true);
+            }
+            _ => {}
         }
-        Key::Backspace => {
-            input_chars.pop();
-        }
-        Key::Escape => {
-            return Ok(true);
-        }
-        _ => {}
+        Ok(false)
     }
-    Ok(false)
+
+    fn render_menu(&mut self) -> Result<()> {
+        debug!("Rendering menu: {}", self.current_menu);
+        let remaining_path = String::from_iter(&self.input_chars[self.input_pos..]);
+        let keysection_len = self
+            .current_menu
+            .entries
+            .keys()
+            .map(|keys| keys.len())
+            .max()
+            .expect("empty menu")
+            + 1;
+        for (keys, node) in &self.current_menu.entries {
+            let keys = String::from_iter(keys);
+            let keys = if let Some(rest) = keys.strip_prefix(&remaining_path) {
+                format!(
+                    "{}{}:",
+                    style(&remaining_path).green().bright().bold(),
+                    rest
+                )
+            } else {
+                format!("{keys}:")
+            };
+            let keys = pad_str(&keys, keysection_len, Alignment::Left, None);
+            writeln!(self.out_proxy, "{keys} {node}")?;
+        }
+        Ok(())
+    }
 }
 
 fn configure_command(
@@ -372,37 +395,6 @@ fn query_env_var(
     }
     hist.push(line);
     Ok(hist)
-}
-
-fn render_menu(
-    current_menu: &Menu,
-    remaining_path: &[char],
-    out_proxy: &mut OutProxy,
-) -> Result<()> {
-    debug!("Rendering menu: {current_menu}");
-    let remaining_path = String::from_iter(remaining_path);
-    let keysection_len = current_menu
-        .entries
-        .keys()
-        .map(|keys| keys.len())
-        .max()
-        .expect("empty menu")
-        + 1;
-    for (keys, node) in &current_menu.entries {
-        let keys = String::from_iter(keys);
-        let keys = if let Some(rest) = keys.strip_prefix(&remaining_path) {
-            format!(
-                "{}{}:",
-                style(&remaining_path).green().bright().bold(),
-                rest
-            )
-        } else {
-            format!("{keys}:")
-        };
-        let keys = pad_str(&keys, keysection_len, Alignment::Left, None);
-        writeln!(out_proxy, "{keys} {node}")?;
-    }
-    Ok(())
 }
 
 fn follow_path<'a>(menu: &'a Menu, input_chars: &[char], pos: usize) -> MenuMatch<'a> {

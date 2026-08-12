@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+echo remove this message after adding a test for -p
+echo also you need to still bump the version
+exit 1
+
 pkg_id="$(cargo pkgid)"
 tag=${pkg_id##*#}
 

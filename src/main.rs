@@ -71,6 +71,7 @@ fn main() -> Result<()> {
             exit(1);
         }
     }
+
     let (mut runner, mb_cmd) = Runner::new(&menu, &args.input, &snippet_table)?;
 
     if let Some(cmd) = mb_cmd {
